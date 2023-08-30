@@ -1,3 +1,4 @@
+import csv
 import datetime
 import glob
 import json
@@ -127,14 +128,20 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
 
     :param config:
     :type config: dict[str, object]
-    :param analysis:
-    :type analysis: dict[str, object]
+    :param run: Dictionary describing the run to be analyzed. Keys: ['run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
+    :type run: dict[str, object]
+    :assembly_mode: Whether to run the short or long assembly pipeline.
+    :type assembly_mode: str
     :return: None
     :rtype: NoneType
     """
     base_analysis_outdir = config['analysis_output_dir']
     base_analysis_work_dir = config['analysis_work_dir']
+    analysis_run_id = run['run_id']
+    analysis_run_output_dir = os.path.abspath(os.path.join(base_analysis_outdir, analysis_run_id, assembly_mode))
+
     no_value_flags_by_pipeline_name = {
+        "BCCDC-PHL/basic-sequence-qc": [],
         "BCCDC-PHL/taxon-abundance": [],
         "BCCDC-PHL/routine-assembly": ["hybrid", "long_only", "bakta", "prokka"],
         "BCCDC-PHL/mlst-nf": [],
@@ -151,7 +158,9 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
         pipeline_short_name = pipeline['pipeline_name'].split('/')[1]
         pipeline_minor_version = ''.join(pipeline['pipeline_version'].rsplit('.', 1)[0])
 
-        if pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly' and assembly_mode == "short":
+        if pipeline['pipeline_name'] == 'BCCDC-PHL/basic-sequence-qc' and assembly_mode == "short":
+            pipeline['pipeline_parameters']['prefix'] = analysis_run_id
+        elif pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly' and assembly_mode == "short":
             pipeline['pipeline_parameters'].pop('fastq_input_long', None)
         elif pipeline['pipeline_name'] == 'BCCDC-PHL/mlst-nf':
             analysis_run_id = os.path.basename(run['analysis_parameters']['fastq_input'])
@@ -247,7 +256,41 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
             logging.info(json.dumps({"event_type": "analysis_completed", "sequencing_run_id": analysis_run_id, "pipeline_command": " ".join(pipeline_command)}))
             shutil.rmtree(analysis_work_dir, ignore_errors=True)
             logging.info(json.dumps({"event_type": "analysis_work_dir_deleted", "sequencing_run_id": analysis_run_id, "analysis_work_dir_path": analysis_work_dir}))
-            if pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly':
+            if pipeline['pipeline_name'] == 'BCCDC-PHL/basic-sequence-qc':
+                samplesheets_dir = os.path.join(analysis_run_output_dir, "samplesheets")
+                os.makedirs(samplesheets_dir, exist_ok=True)
+                qc_summary_path = os.path.join(analysis_run_output_dir, analysis_run_id + "_auto-cpo_qc_summary.csv")
+                basic_sequence_qc_csv_path = os.path.join(analysis_pipeline_output_dir, analysis_run_id + '_basic_qc_stats.csv')
+                basic_sequence_qc = {}
+                if os.path.exists(basic_sequence_qc_csv_path):
+                    total_bases_by_library = {}
+                    with open(basic_sequence_qc_csv_path, 'r') as f:
+                        reader = csv.DictReader(f, dialect='unix')
+                        for row in reader:
+                            library_id = row['sample_id']
+                            total_bases_input = 0
+                            try:
+                                total_bases_input = int(row['total_bases_before_filtering'])
+                            except ValueError as e:
+                                pass
+                            total_bases_by_library[library_id] = {
+                                "sequencing_run_id": analysis_run_id,
+                                "library_id": library_id,
+                                "total_bases_input": total_bases_input,
+                            }
+                            qc_pass_fail = "FAIL"
+                            if total_bases_input > config['qc_filters']['minimum_total_bases_input']:
+                                qc_pass_fail = "WARN"
+                            if total_bases_input > config['qc_filters']['warning_total_bases_input']:
+                                qc_pass_fail = "PASS"
+                            total_bases_by_library[library_id]['total_bases_input_pass_fail'] = qc_pass_fail
+                    with open(qc_summary_path, 'w') as f:
+                        writer = csv.DictWriter(f, fieldnames=['sequencing_run_id', 'library_id', 'total_bases_input', 'total_bases_input_pass_fail'], dialect='unix', quoting=csv.QUOTE_MINIMAL)
+                        writer.writeheader()
+                        for library_id, library_info in total_bases_by_library.items():
+                            writer.writerow(library_info)
+                    exit()
+            elif pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly':
                 assemblies_dir = os.path.join(analysis_run_output_dir, "assemblies")
                 os.makedirs(assemblies_dir, exist_ok=True)
                 for assembly in glob.glob(os.path.join(analysis_pipeline_output_dir, '*', '*.fa')):
