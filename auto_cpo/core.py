@@ -115,6 +115,34 @@ def check_analysis_dependencies_complete(pipeline: dict[str, object], analysis: 
     return all_dependencies_complete
 
 
+def get_library_fastq_paths(fastq_input_dir: str):
+    """
+    Get the paths to all of the fastq files in a directory.
+    param: fastq_input_dir: Path to a directory containing fastq files.
+    type: fastq_input_dir: str
+    return: Paths to R1 and R2 fastq files, indexed by library ID. Keys of the dict are library IDs, values are dicts with keys: ['ID', 'R1', 'R2'].
+    rtype: dict[str, dict[str, str]]
+    """
+    fastq_paths_by_library_id = {}
+    for fastq_file in glob.glob(os.path.join(fastq_input_dir, '*.f*q.gz')):
+        fastq_file_basename = os.path.basename(fastq_file)
+        fastq_file_abspath = os.path.abspath(fastq_file)
+        fastq_file_basename_parts = fastq_file_basename.split('_')
+        library_id = fastq_file_basename_parts[0]
+        if library_id not in fastq_paths_by_library_id:
+            fastq_paths_by_library_id[library_id] = {
+                'ID': library_id,
+                'R1': None,
+                'R2': None,
+            }
+        if '_R1' in fastq_file_basename:
+            fastq_paths_by_library_id[library_id]['R1'] = fastq_file_abspath
+        elif '_R2' in fastq_file_basename:
+            fastq_paths_by_library_id[library_id]['R2'] = fastq_file_abspath
+
+    return fastq_paths_by_library_id
+
+
 def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode: str):
     """
     Initiate an analysis on one directory of fastq files. We assume that the directory of fastq files is named using
@@ -162,20 +190,17 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
             pipeline['pipeline_parameters']['prefix'] = analysis_run_id
         elif pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly' and assembly_mode == "short":
             pipeline['pipeline_parameters'].pop('fastq_input_long', None)
+            pipeline['pipeline_parameters']['samplesheet_input'] = os.path.join(analysis_run_output_dir, 'samplesheets', analysis_run_id + '_routine-assembly_samplesheet.csv')
         elif pipeline['pipeline_name'] == 'BCCDC-PHL/mlst-nf':
-            analysis_run_id = os.path.basename(run['analysis_parameters']['fastq_input'])
             stashed_fastq_input = run['analysis_parameters'].pop('fastq_input', None)
             analysis_run_output_dir = os.path.abspath(os.path.join(base_analysis_outdir, analysis_run_id, assembly_mode))
             assemblies_dir = os.path.join(analysis_run_output_dir, 'assemblies')
             run['analysis_parameters']['assembly_input'] = assemblies_dir
         elif pipeline['pipeline_name'] == 'BCCDC-PHL/plasmid-screen':
-            analysis_run_id = os.path.basename(run['analysis_parameters']['fastq_input'])
+            pipeline['pipeline_parameters']['samplesheet_input'] = os.path.join(analysis_run_output_dir, 'samplesheets', analysis_run_id + '_plasmid-screen_samplesheet.csv')
             analysis_run_output_dir = os.path.abspath(os.path.join(base_analysis_outdir, analysis_run_id, assembly_mode))
             assemblies_dir = os.path.join(analysis_run_output_dir, 'assemblies')
             run['analysis_parameters']['assembly_input'] = assemblies_dir
-        else:
-            analysis_run_id = os.path.basename(run['analysis_parameters']['fastq_input'])
-            analysis_run_output_dir = os.path.abspath(os.path.join(base_analysis_outdir, analysis_run_id, assembly_mode))
 
         analysis_output_dir_name = '-'.join([pipeline_short_name, pipeline_minor_version, 'output'])
         analysis_pipeline_output_dir = os.path.abspath(os.path.join(analysis_run_output_dir, analysis_output_dir_name))
@@ -289,7 +314,23 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
                         writer.writeheader()
                         for library_id, library_info in total_bases_by_library.items():
                             writer.writerow(library_info)
-                    exit()
+                    logging.info(json.dumps({"event_type": "qc_summary_written", "sequencing_run_id": analysis_run_id, "qc_summary_path": qc_summary_path}))
+                    library_fastq_paths = get_library_fastq_paths(run['analysis_parameters']['fastq_input'])
+                    assembly_samplesheet_path = os.path.join(samplesheets_dir, analysis_run_id + '_routine-assembly_samplesheet.csv')
+                    with open(assembly_samplesheet_path, 'w') as f:
+                        output_fieldnames = ['ID', 'R1', 'R2']
+                        writer = csv.DictWriter(f, fieldnames=output_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL)
+                        writer.writeheader()
+                        for library_id, library_qc in total_bases_by_library.items():
+                            pass_fail = library_qc['total_bases_input_pass_fail']
+                            if pass_fail == "PASS" or pass_fail == "WARN":
+                                writer.writerow(library_fastq_paths[library_id])
+                    logging.info(json.dumps({
+                        "event_type": "samplesheet_written",
+                        "sequencing_run_id": analysis_run_id,
+                        "pipeline_name": "BCCDC-PHL/routine-assembly",
+                        "samplesheet_path": assembly_samplesheet_path,
+                    }))
             elif pipeline['pipeline_name'] == 'BCCDC-PHL/routine-assembly':
                 assemblies_dir = os.path.join(analysis_run_output_dir, "assemblies")
                 os.makedirs(assemblies_dir, exist_ok=True)
@@ -297,7 +338,37 @@ def analyze_run(config: dict[str, object], run: dict[str, object], assembly_mode
                     src = assembly
                     dest = os.path.join(assemblies_dir, os.path.basename(assembly))
                     os.symlink(src, dest)
-                logging.info(json.dumps({"event_type": "assemblies_symlinked", "sequencing_run_id": analysis_run_id, "assembly_analysis_output_dir": analysis_pipeline_output_dir, "assemblies_symlink_dir": assemblies_dir}))
+                logging.info(json.dumps({
+                    "event_type": "assemblies_symlinked",
+                    "sequencing_run_id": analysis_run_id,
+                    "assembly_analysis_output_dir": analysis_pipeline_output_dir,
+                    "assemblies_symlink_dir": assemblies_dir
+                }))
+                assembly_samplesheet_path = os.path.join(samplesheets_dir, analysis_run_id + '_routine-assembly_samplesheet.csv')
+                plasmid_screen_samplesheet_path = os.path.join(samplesheets_dir, analysis_run_id + '_plasmid-screen_samplesheet.csv')
+                plasmid_screen_samplesheet = []
+                with open(assembly_samplesheet_path, 'r') as f:
+                    reader = csv.DictReader(f, dialect='unix')
+                    for row in reader:
+                        plasmid_screen_samplesheet.append(row)
+                assembly_paths = list(map(lambda x: os.path.abspath(x), glob.glob(os.path.join(assemblies_dir, '*.fa'))))
+                for record in plasmid_screen_samplesheet:
+                    for assembly_path in assembly_paths:
+                        assembly_basename = os.path.basename(assembly_path)
+                        assembly_library_id = assembly_basename.split('_')[0]
+                        if record['ID'] == assembly_library_id:
+                            record['ASSEMBLY'] = assembly_path
+                with open(plasmid_screen_samplesheet_path, 'w') as f:
+                    writer = csv.DictWriter(f, fieldnames=['ID', 'R1', 'R2', 'ASSEMBLY'], dialect='unix', quoting=csv.QUOTE_MINIMAL)
+                    writer.writeheader()
+                    for record in plasmid_screen_samplesheet:
+                        writer.writerow(record)
+                logging.info(json.dumps({
+                    "event_type": "samplesheet_written",
+                    "sequencing_run_id": analysis_run_id,
+                    "pipeline_name": "BCCDC-PHL/plasmid-screen",
+                    "samplesheet_path": plasmid_screen_samplesheet_path
+                }))
             elif pipeline['pipeline_name'] == 'BCCDC-PHL/mlst-nf':
                 run['analysis_parameters']['fastq_input'] = stashed_fastq_input
         except subprocess.CalledProcessError as e:
