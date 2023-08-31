@@ -50,6 +50,8 @@ def main():
 
             scan_start_timestamp = datetime.datetime.now()
             for run in core.scan(config):
+                if quit_when_safe:
+                    exit(0)
                 if run is not None:
                     try:
                         config = auto_cpo.config.load_config(args.config)
