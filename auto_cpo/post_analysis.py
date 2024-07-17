@@ -298,6 +298,31 @@ def post_analysis_routine_assembly(config, pipeline, run):
     return None
 
 
+def post_analysis_mlst_nf(config, pipeline, run):
+    """
+    Perform post-analysis tasks for the mlst-nf pipeline.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: None
+    :rtype: None
+    """
+    logging.info(json.dumps({
+        "event_type": "post_analysis_started",
+        "sequencing_run_id": run['sequencing_run_id'],
+        "pipeline": pipeline,
+        "run": run,
+    }))
+    sequencing_run_id = run['sequencing_run_id']
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+
+    return None
+
+
 def post_analysis_plasmid_screen(config, pipeline, run):
     """
     Perform post-analysis tasks for the plasmid-screen pipeline.
@@ -384,6 +409,8 @@ def post_analysis(config, pipeline, run):
         return post_analysis_taxon_abundance(config, pipeline, run)
     elif pipeline_name == 'BCCDC-PHL/routine-assembly':
         return post_analysis_routine_assembly(config, pipeline, run)
+    elif pipeline_name == 'BCCDC-PHL/mlst-nf':
+        return post_analysis_mlst_nf(config, pipeline, run)
     elif pipeline_name == 'BCCDC-PHL/plasmid-screen':
         return post_analysis_plasmid_screen(config, pipeline, run)
     else:
