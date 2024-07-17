@@ -187,7 +187,6 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_type
             logging.error(json.dumps({"event_type": "prepare_analysis_failed", "sequencing_run_id": sequencing_run_id, "pipeline_name": pipeline['name'], "error": str(e)}))
             return
 
-        print(json.dumps(pipeline, indent=4))
         logging.debug(json.dumps({"event_type": "prepare_analysis_complete", "sequencing_run_id": sequencing_run_id, "pipeline_name": pipeline.get('name', "unknown")}))
 
         analysis_dependencies_complete = pre_analysis.check_analysis_dependencies_complete(config, pipeline, run)
