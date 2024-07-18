@@ -46,9 +46,9 @@ def build_pipeline_command(config, pipeline):
     return pipeline_command
 
 
-def analyze_run(config, pipeline, run):
+def run_pipeline(config, pipeline, run):
     """
-    Analyzes a run.
+    Run a pipeline.
 
     :param config: The config dictionary
     :type config: dict
