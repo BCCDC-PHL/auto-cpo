@@ -209,7 +209,7 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_type
             continue
 
         if pipeline:
-            analysis.analyze_run(config, pipeline, run)
+            analysis.run_pipeline(config, pipeline, run)
             post_analysis.post_analysis(config, pipeline, run)
         else:
             logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "analysis_preparation_failed"}))
