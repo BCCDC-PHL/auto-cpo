@@ -62,6 +62,8 @@ def main():
                         logging.error(json.dumps({"event_type": "load_config_failed", "config_file": os.path.abspath(args.config)}))
                     if run['instrument_type'] == 'illumina':
                         core.analyze_run(config, run, "short")
+                    elif run['instrument_type'] == 'nanopore':
+                        core.analyze_run(config, run, "hybrid")
                 if quit_when_safe:
                     exit(0)
             scan_complete_timestamp = datetime.datetime.now()

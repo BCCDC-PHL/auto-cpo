@@ -49,7 +49,7 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
             ready_to_analyze = True
         conditions_checked = {
             "is_directory": subdir.is_dir(),
-            "matches_illumina_run_id_format": ((matches_miseq_regex is not None) or (matches_nextseq_regex is not None)),
+            "matches_sequencing_run_id_format": any([matches_miseq_regex, matches_nextseq_regex, matches_gridion_regex]),
             "ready_to_analyze": ready_to_analyze,
         }
         conditions_met = list(conditions_checked.values())
@@ -58,13 +58,17 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
         if all(conditions_met):
 
             logging.info(json.dumps({"event_type": "fastq_directory_found", "sequencing_run_id": run_id, "fastq_directory_path": os.path.abspath(subdir.path)}))
-            analysis_parameters['fastq_input'] = run_fastq_directory
             run = {
                 "sequencing_run_id": run_id,
                 "fastq_directory": run_fastq_directory,
-                "instrument_type": "illumina",
                 "analysis_parameters": analysis_parameters
             }
+            if matches_miseq_regex:
+                run["instrument_type"] = "illumina"
+            elif matches_nextseq_regex:
+                run["instrument_type"] = "illumina"
+            elif matches_gridion_regex:
+                run["instrument_type"] = "nanopore"
             yield run
         else:
             logging.debug(json.dumps({"event_type": "directory_skipped", "fastq_directory": run_fastq_directory, "conditions_checked": conditions_checked}))
@@ -85,48 +89,6 @@ def scan(config: dict[str, object]) -> Iterator[Optional[dict[str, object]]]:
     logging.info(json.dumps({"event_type": "scan_start"}))
     for symlinks_dir in find_fastq_dirs(config):    
         yield symlinks_dir
-
-
-def check_analysis_dependencies_complete(pipeline: dict[str, object], analysis: dict[str, object], analysis_run_output_dir: str):
-    """
-    Check that all of the entries in the pipeline's `dependencies` config have completed. If so, return True. Return False otherwise.
-
-    Pipeline completion is determined by the presence of an `analysis_complete.json` file in the analysis output directory.
-
-    :param pipeline:
-    :type pipeline: dict[str, object]
-    :param analysis:
-    :type analysis: dictp[str, object]
-    :param analysis_run_output_dir:
-    :type analysis_run_output_dir: str
-    :return: Whether or not all of the pipelines listed in `dependencies` have completed.
-    :rtype: bool
-    """
-    all_dependencies_complete = False
-    dependencies = pipeline['dependencies']
-    if dependencies is None:
-        return True
-    dependencies_complete = []
-    dependency_infos = []
-    for dependency in dependencies:
-        dependency_pipeline_short_name = dependency['pipeline_name'].split('/')[1]
-        dependency_pipeline_minor_version = ''.join(dependency['pipeline_version'].rsplit('.', 1)[0])
-        dependency_analysis_output_dir_name = '-'.join([dependency_pipeline_short_name, dependency_pipeline_minor_version, 'output'])
-        dependency_analysis_complete_path = os.path.join(analysis_run_output_dir, dependency_analysis_output_dir_name, 'analysis_complete.json')
-        dependency_analysis_complete = os.path.exists(dependency_analysis_complete_path)
-        dependency_info = {
-            'pipeline_name': dependency['pipeline_name'],
-            'pipeline_version': dependency['pipeline_version'],
-            'analysis_complete_path': dependency_analysis_complete_path,
-            'analysis_complete': dependency_analysis_complete
-        }
-        dependency_infos.append(dependency_info)
-    dependencies_complete = [dep['analysis_complete'] for dep in dependency_infos]
-    logging.info(json.dumps({"event_type": "checked_analysis_dependencies", "all_analysis_dependencies_complete": all(dependencies_complete), "analysis_dependencies": dependency_infos}))
-    if all(dependencies_complete):
-        all_dependencies_complete = True
-
-    return all_dependencies_complete
 
 
 def get_library_fastq_paths(fastq_input_dir: str):
@@ -157,7 +119,7 @@ def get_library_fastq_paths(fastq_input_dir: str):
     return fastq_paths_by_library_id
 
 
-def analyze_run(config: dict[str, object], run: dict[str, object], analysis_type: str = "short"):
+def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode: str = "short"):
     """
     Initiate an analysis on one directory of fastq files. We assume that the directory of fastq files is named using
     a sequencing run ID.
@@ -174,22 +136,25 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_type
     :param run: Dictionary describing the run to be analyzed. Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
     :type run: dict[str, object] Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
     :param analysis_type: The type of analysis to perform. Default is 'short', alternative is 'hybrid'.
-    :type analysis_type: str
+    :type analysis_mode: str
     :return: None
     :rtype: NoneType
     """
     sequencing_run_id = run['sequencing_run_id']
-    for pipeline in config['pipelines']:
+    for pipeline in config['pipelines_by_analysis_mode'][analysis_mode]:
+        if pipeline is None:
+            logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "pipeline_not_found"}))
+            continue
         try:
             logging.debug(json.dumps({"event_type": "prepare_analysis_started", "sequencing_run_id": sequencing_run_id, "pipeline_name": pipeline['name']}))
-            pipeline = pre_analysis.prepare_analysis(config, pipeline, run)
+            pipeline = pre_analysis.prepare_analysis(config, pipeline, run, analysis_mode)
         except Exception as e:
             logging.error(json.dumps({"event_type": "prepare_analysis_failed", "sequencing_run_id": sequencing_run_id, "pipeline_name": pipeline['name'], "error": str(e)}))
             return
 
         logging.debug(json.dumps({"event_type": "prepare_analysis_complete", "sequencing_run_id": sequencing_run_id, "pipeline_name": pipeline.get('name', "unknown")}))
 
-        analysis_dependencies_complete = pre_analysis.check_analysis_dependencies_complete(config, pipeline, run)
+        analysis_dependencies_complete = pre_analysis.check_analysis_dependencies_complete(config, pipeline, run, analysis_mode)
         analysis_not_already_started = not os.path.exists(pipeline['parameters']['outdir'])
         conditions_checked = {
             'pipeline_dependencies_met': analysis_dependencies_complete,
@@ -209,8 +174,8 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_type
             continue
 
         if pipeline:
-            analysis.run_pipeline(config, pipeline, run)
-            post_analysis.post_analysis(config, pipeline, run)
+            analysis.run_pipeline(config, pipeline, run, analysis_mode)
+            post_analysis.post_analysis(config, pipeline, run, analysis_mode)
         else:
             logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "analysis_preparation_failed"}))
             continue

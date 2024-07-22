@@ -9,7 +9,7 @@ import shutil
 from . import parsers
 
 
-def post_analysis_basic_sequence_qc(config, pipeline, run):
+def post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the basic-sequence-qc pipeline. This includes generating:
     - A sample QC summary CSV file
@@ -32,7 +32,7 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         "run": run,
     }))
     sequencing_run_id = run['sequencing_run_id']
-    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
     pipeline_short_name = pipeline['name'].split('/')[1]
     pipeline_minor_version = ''.join(pipeline['version'].rsplit('.', 1)[0])
     analysis_pipeline_output_dir = pipeline.get('parameters', {}).get('outdir', None)
@@ -42,7 +42,10 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         "analysis_pipeline_output_dir": analysis_pipeline_output_dir
     }))
     basic_qc_stats_csv_path = None
-    basic_qc_stats_csv_path = os.path.join(analysis_pipeline_output_dir, sequencing_run_id + '_basic_qc_stats.csv')
+    basic_qc_stats_csv_path = os.path.join(
+        analysis_pipeline_output_dir,
+        sequencing_run_id + '_basic_qc_stats.csv'
+    )
     basic_sequence_qc = {}
     if not basic_qc_stats_csv_path or not os.path.exists(basic_qc_stats_csv_path):
         logging.warning(json.dumps({
@@ -70,7 +73,10 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         'q30_percent_after_filtering',
         'q30_percent_qc_status',
     ]
-    sample_qc_summary_path = os.path.join(analysis_run_output_dir, sequencing_run_id + "_auto-cpo_sample_qc_summary.csv")
+    sample_qc_summary_path = os.path.join(
+        analysis_run_output_dir,
+        sequencing_run_id + "_auto-cpo_sample_qc_summary.csv"
+    )
     with open(sample_qc_summary_path, 'w') as f:
         writer = csv.DictWriter(f, fieldnames=sample_qc_output_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
         writer.writeheader()
@@ -155,7 +161,7 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         }
         assembly_writer.writerow(assembly_samplesheet)
         taxon_abundance_writer.writerow(assembly_samplesheet)
-    
+
     return None
 
 
@@ -323,7 +329,7 @@ def post_analysis_mlst_nf(config, pipeline, run):
     return None
 
 
-def post_analysis_plasmid_screen(config, pipeline, run):
+def post_analysis_plasmid_screen(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the plasmid-screen pipeline.
 
@@ -348,7 +354,7 @@ def post_analysis_plasmid_screen(config, pipeline, run):
     return None
 
 
-def post_analysis(config, pipeline, run):
+def post_analysis(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for a pipeline.
 
@@ -358,6 +364,8 @@ def post_analysis(config, pipeline, run):
     :type pipeline: dict
     :param run: The run dictionary
     :type run: dict
+    :param analysis_mode: The analysis mode
+    :type analysis_mode: str
     :return: None
     """
     pipeline_name = pipeline['name']
@@ -404,15 +412,17 @@ def post_analysis(config, pipeline, run):
             }))
 
     if pipeline_name == 'BCCDC-PHL/basic-sequence-qc':
-        return post_analysis_basic_sequence_qc(config, pipeline, run)
+        return post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode)
+    elif pipeline_name == 'BCCDC-PHL/basic-nanopore-qc':
+        return post_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/taxon-abundance':
-        return post_analysis_taxon_abundance(config, pipeline, run)
+        return post_analysis_taxon_abundance(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/routine-assembly':
-        return post_analysis_routine_assembly(config, pipeline, run)
+        return post_analysis_routine_assembly(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/mlst-nf':
-        return post_analysis_mlst_nf(config, pipeline, run)
+        return post_analysis_mlst_nf(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/plasmid-screen':
-        return post_analysis_plasmid_screen(config, pipeline, run)
+        return post_analysis_plasmid_screen(config, pipeline, run, analysis_mode)
     else:
         logging.warning(json.dumps({
             "event_type": "post_analysis_not_implemented",
