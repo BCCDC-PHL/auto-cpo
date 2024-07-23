@@ -111,40 +111,11 @@ def pre_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode):
     run_analysis_outdir = os.path.join(base_analysis_outdir, sequencing_run_id, analysis_mode)
     pipeline_output_dirname = '-'.join([pipeline_short_name, pipeline_minor_version, 'output'])
     pipeline_analysis_output_dir = os.path.join(run_analysis_outdir, pipeline_output_dirname)
-    samplesheet_path = os.path.join(run_analysis_outdir, 'samplesheets', sequencing_run_id + '_basic-nanopore-qc_samplesheet.csv')
 
-    fastq_input_dir = run['fastq_input']
-    fastq_glob = os.path.join(fastq_input_dir, '*.f*q.gz')
-    fastq_paths = glob.glob(fastq_glob)
-    fastq_paths_by_library_id = {}
-    for fastq_file in fastq_paths:
-        fastq_file_basename = os.path.basename(fastq_file)
-        fastq_file_abspath = os.path.abspath(fastq_file)
-        fastq_file_basename_parts = fastq_file_basename.split('_')
-        library_id = fastq_file_basename_parts[0]
-        if library_id not in fastq_paths_by_library_id:
-            fastq_paths_by_library_id[library_id] = {
-                'ID': library_id,
-                'R1': None,
-                'R2': None,
-            }
-        if '_R1' in fastq_file_basename:
-            fastq_paths_by_library_id[library_id]['R1'] = fastq_file_abspath
-        elif '_R2' in fastq_file_basename:
-            fastq_paths_by_library_id[library_id]['R2'] = fastq_file_abspath
+    fastq_input_dir = run['fastq_directory']
 
-    samplesheet_fieldnames = [
-        'ID',
-        'R1',
-        'R2',
-    ]
-    with open(samplesheet_path, 'w') as f:
-        writer = csv.writer(DictWriter(f, fieldnames=samplesheet_fieldnames))
-        writer.writeheader()
-        for library_id, fastq_paths in fastq_paths_by_library_id.items():
-            writer.writerow(fastq_paths)
-
-    pipeline['parameters']['samplesheet_input'] = samplesheet_path
+    pipeline['parameters']['prefix'] = sequencing_run_id
+    pipeline['parameters']['fastq_input'] = fastq_input_dir
     pipeline['parameters']['outdir'] = pipeline_analysis_output_dir
 
     return pipeline
@@ -231,6 +202,39 @@ def pre_analysis_routine_assembly(config, pipeline, run, analysis_mode):
 
     return pipeline
 
+
+def pre_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
+    """
+    Prepare the BCCDC-PHL/plasmid-assembly analysis pipeline for execution.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: The prepared pipeline dictionary
+    :rtype: dict
+    """
+    sequencing_run_id = run['sequencing_run_id']
+    pipeline_short_name = pipeline['name'].split('/')[1]
+    pipeline_minor_version = ''.join(pipeline['version'].rsplit('.', 1)[0])
+    
+    base_analysis_outdir = config['analysis_output_dir']
+    run_analysis_outdir = os.path.join(base_analysis_outdir, sequencing_run_id, analysis_mode)
+    pipeline_output_dirname = '-'.join([pipeline_short_name, pipeline_minor_version, 'output'])
+    pipeline_analysis_output_dir = os.path.join(run_analysis_outdir, pipeline_output_dirname)
+    samplesheet_path = os.path.join(
+        run_analysis_outdir,
+        'samplesheets',
+        sequencing_run_id + '_plasmid-assembly_samplesheet.csv'
+    )
+
+    pipeline['parameters']['samplesheet_input'] = samplesheet_path
+    pipeline['parameters']['outdir'] = pipeline_analysis_output_dir
+
+    return pipeline
+    
 
 def pre_analysis_mlst_nf(config, pipeline, run, analysis_mode):
     """
@@ -353,6 +357,8 @@ def prepare_analysis(config, pipeline, run, analysis_mode):
         return pre_analysis_taxon_abundance(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/routine-assembly':
         return pre_analysis_routine_assembly(config, pipeline, run, analysis_mode)
+    elif pipeline_name == 'BCCDC-PHL/plasmid-assembly':
+        return pre_analysis_plasmid_assembly(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/mlst-nf':
         return pre_analysis_mlst_nf(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/plasmid-screen':

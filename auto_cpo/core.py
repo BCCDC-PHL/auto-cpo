@@ -31,6 +31,8 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
     miseq_run_id_regex = "\\d{6}_M\\d{5}_\\d+_\\d{9}-[A-Z0-9]{5}"
     nextseq_run_id_regex = "\\d{6}_VH\\d{5}_\\d+_[A-Z0-9]{9}"
     gridion_run_id_regex = "\\d{8}_\\d{4}_X[1-5]_[A-Z0-9]+_[a-z0-9]{8}"
+    promethion_run_id_regex = "\\d{8}_\\d{4}_P\\dS_\\d+-\\d_[A-Z0-9]+_[a-z0-9]{8}"
+
     fastq_by_run_dir = config['fastq_by_run_dir']
     subdirs = os.scandir(fastq_by_run_dir)
     if 'analyze_runs_in_reverse_order' in config and config['analyze_runs_in_reverse_order']:
@@ -42,14 +44,23 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
         matches_miseq_regex = re.match(miseq_run_id_regex, run_id)
         matches_nextseq_regex = re.match(nextseq_run_id_regex, run_id)
         matches_gridion_regex = re.match(gridion_run_id_regex, run_id)
+        matches_promethion_regex = re.match(promethion_run_id_regex, run_id)
+
+        matches_sequencing_run_id_format = any([
+            matches_miseq_regex,
+            matches_nextseq_regex,
+            matches_gridion_regex,
+            matches_promethion_regex
+        ])
 
         if check_symlinks_complete:
             ready_to_analyze = os.path.exists(os.path.join(subdir.path, "symlinks_complete.json"))
         else:
             ready_to_analyze = True
+            
         conditions_checked = {
             "is_directory": subdir.is_dir(),
-            "matches_sequencing_run_id_format": any([matches_miseq_regex, matches_nextseq_regex, matches_gridion_regex]),
+            "matches_sequencing_run_id_format": matches_sequencing_run_id_format,
             "ready_to_analyze": ready_to_analyze,
         }
         conditions_met = list(conditions_checked.values())
@@ -68,6 +79,8 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
             elif matches_nextseq_regex:
                 run["instrument_type"] = "illumina"
             elif matches_gridion_regex:
+                run["instrument_type"] = "nanopore"
+            elif matches_promethion_regex:
                 run["instrument_type"] = "nanopore"
             yield run
         else:

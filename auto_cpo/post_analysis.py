@@ -165,7 +165,34 @@ def post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode):
     return None
 
 
-def post_analysis_taxon_abundance(config, pipeline, run):
+def post_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode):
+    """
+    Perform post-analysis tasks for the basic-nanopore-qc pipeline.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: None
+    :rtype: None
+    """
+    logging.info(json.dumps({
+        "event_type": "post_analysis_started",
+        "sequencing_run_id": run['sequencing_run_id'],
+        "pipeline": pipeline,
+        "run": run,
+    }))
+    sequencing_run_id = run['sequencing_run_id']
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
+    print(json.dumps(run, indent=2))
+    exit()
+
+    return None
+
+
+def post_analysis_taxon_abundance(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the taxon-abundance pipeline.
 
@@ -190,7 +217,7 @@ def post_analysis_taxon_abundance(config, pipeline, run):
     return None
 
 
-def post_analysis_routine_assembly(config, pipeline, run):
+def post_analysis_routine_assembly(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the routine-assembly pipeline.
 
@@ -211,9 +238,9 @@ def post_analysis_routine_assembly(config, pipeline, run):
         "run": run,
     }))
     sequencing_run_id = run['sequencing_run_id']
-    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
 
-    assembly_symlinks_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, 'assemblies')
+    assembly_symlinks_dir = os.path.join(analysis_run_output_dir, 'assemblies')
     os.makedirs(assembly_symlinks_dir, exist_ok=True)
 
     pipeline_short_name = pipeline['name'].split('/')[1]
@@ -304,7 +331,32 @@ def post_analysis_routine_assembly(config, pipeline, run):
     return None
 
 
-def post_analysis_mlst_nf(config, pipeline, run):
+def post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
+    """
+    Perform post-analysis tasks for the plasmid-assembly pipeline.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: None
+    :rtype: None
+    """
+    logging.info(json.dumps({
+        "event_type": "post_analysis_started",
+        "sequencing_run_id": run['sequencing_run_id'],
+        "pipeline": pipeline,
+        "run": run,
+    }))
+    sequencing_run_id = run['sequencing_run_id']
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+
+    return None
+
+
+def post_analysis_mlst_nf(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the mlst-nf pipeline.
 
@@ -419,6 +471,8 @@ def post_analysis(config, pipeline, run, analysis_mode):
         return post_analysis_taxon_abundance(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/routine-assembly':
         return post_analysis_routine_assembly(config, pipeline, run, analysis_mode)
+    elif pipeline_name == 'BCCDC-PHL/plasmid-assembly':
+        return post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/mlst-nf':
         return post_analysis_mlst_nf(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/plasmid-screen':
