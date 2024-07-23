@@ -231,6 +231,8 @@ def pre_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
     )
 
     pipeline['parameters']['samplesheet_input'] = samplesheet_path
+    pipeline['parameters']['collect_outputs'] = None
+    pipeline['parameters']['collected_outputs_prefix'] = sequencing_run_id
     pipeline['parameters']['outdir'] = pipeline_analysis_output_dir
 
     return pipeline

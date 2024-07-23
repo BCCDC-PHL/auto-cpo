@@ -41,7 +41,7 @@ def post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode):
         "sequencing_run_id": sequencing_run_id,
         "analysis_pipeline_output_dir": analysis_pipeline_output_dir
     }))
-    basic_qc_stats_csv_path = None
+
     basic_qc_stats_csv_path = os.path.join(
         analysis_pipeline_output_dir,
         sequencing_run_id + '_basic_qc_stats.csv'
@@ -162,6 +162,9 @@ def post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode):
         assembly_writer.writerow(assembly_samplesheet)
         taxon_abundance_writer.writerow(assembly_samplesheet)
 
+    assembly_samplesheet_f.close()
+    taxon_abundance_samplesheet_f.close()
+
     return None
 
 
@@ -186,9 +189,76 @@ def post_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode):
     }))
     sequencing_run_id = run['sequencing_run_id']
     analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
-    print(json.dumps(run, indent=2))
-    exit()
 
+    pipeline_short_name = pipeline['name'].split('/')[1]
+    pipeline_minor_version = ''.join(pipeline['version'].rsplit('.', 1)[0])
+    analysis_pipeline_output_dir = pipeline.get('parameters', {}).get('outdir', None)
+    logging.debug(json.dumps({
+        "event_type": "analysis_pipeline_output_dir",
+        "sequencing_run_id": sequencing_run_id,
+        "analysis_pipeline_output_dir": analysis_pipeline_output_dir
+    }))
+
+    basic_qc_stats_csv_path = os.path.join(
+        analysis_pipeline_output_dir,
+        sequencing_run_id + '_basic_qc_stats.csv'
+    )
+    basic_sequence_qc = {}
+    if not basic_qc_stats_csv_path or not os.path.exists(basic_qc_stats_csv_path):
+        logging.warning(json.dumps({
+            "event_type": "basic_qc_stats_file_not_found",
+            "sequencing_run_id": sequencing_run_id,
+            "basic_qc_stats_csv_path": basic_qc_stats_csv_path
+        }))
+        return None
+
+    logging.debug(json.dumps({
+        "event_type": "basic_qc_stats_file_found",
+        "sequencing_run_id": sequencing_run_id,
+        "basic_qc_stats_csv_path": basic_qc_stats_csv_path
+    }))
+    basic_qc_stats_by_library = parsers.parse_basic_nanopore_qc_stats(basic_qc_stats_csv_path)
+
+    samplesheets_dir = os.path.join(analysis_run_output_dir, 'samplesheets')
+    os.makedirs(samplesheets_dir, exist_ok=True)
+
+    assembly_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-assembly_samplesheet.csv')
+    fastq_by_run_dir = config['fastq_by_run_dir']
+    run_fastq_dir = os.path.join(fastq_by_run_dir, sequencing_run_id)
+    assembly_samplesheet_fieldnames = [
+        'ID',
+        'R1',
+        'R2',
+        'LONG',
+    ]
+    with open(assembly_samplesheet_path, 'w') as f:
+        writer = csv.DictWriter(f, fieldnames=assembly_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+        writer.writeheader()
+        for library_id, qc_stats in basic_qc_stats_by_library.items():
+            r1_fastq_glob = os.path.join(fastq_by_run_dir, '*', library_id + '_R1*.fastq.gz')
+            r2_fastq_glob = os.path.join(fastq_by_run_dir, '*', library_id + '_R2*.fastq.gz')
+            rl_fastq_glob = os.path.join(run_fastq_dir, library_id + '*_RL.fastq.gz')
+            r1_fastq_files = glob.glob(r1_fastq_glob)
+            r2_fastq_files = glob.glob(r2_fastq_glob)
+            rl_fastq_files = glob.glob(rl_fastq_glob)
+            if len(r1_fastq_files) == 0 or len(r2_fastq_files) == 0 or len(rl_fastq_files) == 0:
+                logging.warning(json.dumps({
+                    "event_type": "fastq_files_not_found",
+                    "sequencing_run_id": sequencing_run_id,
+                    "library_id": library_id,
+                    "r1_fastq_glob": r1_fastq_glob,
+                    "r2_fastq_glob": r2_fastq_glob,
+                    "rl_fastq_glob": rl_fastq_glob
+                }))
+                continue
+            samplesheet_record = {
+                'ID': library_id,
+                'R1': os.path.abspath(r1_fastq_files[-1]),
+                'R2': os.path.abspath(r2_fastq_files[-1]),
+                'LONG': os.path.abspath(rl_fastq_files[-1]),
+            }
+            writer.writerow(samplesheet_record)
+    
     return None
 
 
