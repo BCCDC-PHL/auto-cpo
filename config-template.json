@@ -17,79 +17,139 @@
 	    "warning_q30_percent_before_filtering": 80
 	}
     },
-    "pipelines": [
-	{
-	    "name": "BCCDC-PHL/basic-sequence-qc",
-	    "version": "v0.2.0",
-	    "dependencies": null,
-	    "parameters": {
-		"fastq_input": null,
-		"prefix": null,
-		"outdir": null
-	    }
-	},
-	{
-	    "name": "BCCDC-PHL/taxon-abundance",
-	    "version": "v0.1.7",
-	    "dependencies": [
-		{
-		    "name": "BCCDC-PHL/basic-sequence-qc",
-		    "version": "v0.2.0"
+    "pipelines_by_analysis_mode": {
+	"short": [
+	    {
+		"name": "BCCDC-PHL/basic-sequence-qc",
+		"version": "v0.2.1",
+		"dependencies": null,
+		"parameters": {
+		    "fastq_input": null,
+		    "prefix": null,
+		    "outdir": null
 		}
-	    ],
-	    "parameters": {
-		"samplesheet_input": null,
-		"kraken_db": "/path/to/ref_databases/kraken2/2023-06-05_standard",
-		"bracken_db": "/path/to/ref_databases/kraken2/2023-06-05_standard",
-		"read_length": null,
-		"outdir": null
-	    }
-	},
-	{
-	    "name": "BCCDC-PHL/routine-assembly",
-	    "version": "v0.4.5",
-	    "dependencies": [
-		{
-		    "name": "BCCDC-PHL/basic-sequence-qc",
-		    "version": "v0.2.0"
+	    },
+	    {
+		"name": "BCCDC-PHL/taxon-abundance",
+		"version": "v0.1.7",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/basic-sequence-qc",
+			"pipeline_version": "v0.2.1"
+		    }
+		],
+		"parameters": {
+		    "samplesheet_input": null,
+		    "kraken_db": "/path/to/kraken2_db",
+		    "bracken_db": "/path/to/bracken_db",
+		    "read_length": null,
+		    "outdir": null
 		}
-	    ],
-	    "parameters": {
-		"samplesheet_input": null,
-		"bakta": null,
-		"outdir": null
-	    }
-	},
-	{
-	    "name": "BCCDC-PHL/mlst-nf",
-	    "version": "v0.1.4",
-	    "dependencies": [
-		{
-		    "name": "BCCDC-PHL/routine-assembly",
-		    "version": "v0.4.5"
+	    },
+	    {
+		"name": "BCCDC-PHL/routine-assembly",
+		"version": "v0.4.5",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/basic-sequence-qc",
+			"pipeline_version": "v0.2.1"
+		    }
+		],
+		"parameters": {
+		    "samplesheet_input": null,
+		    "bakta": null,
+		    "outdir": null
 		}
-	    ],
-	    "parameters": {
-		"assembly_input": null,
-		"outdir": null
-	    }
-	},
-	{
-	    "name": "BCCDC-PHL/plasmid-screen",
-	    "version": "v0.2.3",
-	    "dependencies": [
-		{
-		    "name": "BCCDC-PHL/routine-assembly",
-		    "version": "v0.4.5"
+	    },
+	    {
+		"name": "BCCDC-PHL/mlst-nf",
+		"version": "v0.1.4",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/routine-assembly",
+			"pipeline_version": "v0.4.5"
+		    }
+		],
+		"parameters": {
+		    "assembly_input": null,
+		    "outdir": null
 		}
-	    ],
-	    "parameters": {
-		"samplesheet_input": null,
-		"pre_assembled": null,
-		"assembly_input": null,
-		"mob_db": "/path/to/ref_databases/mob-suite/plasmid-db",
-		"outdir": null
+	    },
+	    {
+		"name": "BCCDC-PHL/plasmid-screen",
+		"version": "v0.2.3",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/routine-assembly",
+			"pipeline_version": "v0.4.5"
+		    }
+		],
+		"parameters": {
+		    "samplesheet_input": null,
+		    "pre_assembled": null,
+		    "mob_db": "/path/to/mob-suite_db",
+		    "outdir": null
+		}
 	    }
-	}
-    ]
+	],
+	"hybrid": [
+	    {
+		"name": "BCCDC-PHL/basic-nanopore-qc",
+		"version": "v0.1.0",
+		"dependencies": null,
+		"parameters": {
+		    "fastq_input": null,
+		    "prefix": null,
+		    "outdir": null
+		}
+	    },
+	    {
+		"name": "BCCDC-PHL/plasmid-assembly",
+		"version": "v0.1.1",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/basic-nanopore-qc",
+			"pipeline_version": "v0.1.0"
+		    }
+		],
+		"parameters": {
+		    "samplesheet_input": null,
+		    "hybrid": null,
+		    "chromosome_length": 250000,
+		    "db": "/path/to/plassembler_db",
+		    "outdir": null
+		}
+	    },
+	    {
+		"name": "BCCDC-PHL/mlst-nf",
+		"version": "v0.1.4",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/plasmid-assembly",
+			"pipeline_version": "v0.1.1"
+		    }
+		],
+		"parameters": {
+		    "assembly_input": null,
+		    "outdir": null
+		}
+	    },
+	    {
+		"name": "BCCDC-PHL/plasmid-screen",
+		"version": "v0.2.3",
+		"dependencies": [
+		    {
+			"pipeline_name": "BCCDC-PHL/plasmid-assembly",
+			"pipeline_version": "v0.1.1"
+		    }
+		],
+		"parameters": {
+                    "samplesheet_input": null,
+		    "pre_assembled": null,
+		    "mob_db": "/path/to/mob-suite_db",
+		    "outdir": null
+		}
+	    }
+	]
+    }
 }
