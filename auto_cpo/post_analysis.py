@@ -421,7 +421,54 @@ def post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
         "run": run,
     }))
     sequencing_run_id = run['sequencing_run_id']
-    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
+    assemblies_dir = os.path.join(analysis_run_output_dir, 'assemblies')
+    os.makedirs(assemblies_dir, exist_ok=True)
+    plasmid_assemblies_glob = os.path.join(analysis_run_output_dir, 'plasmid-assembly-*-output', 'BC*', 'BC*_plassembler_hybrid.fa')
+    plasmid_assembly_paths = glob.glob(plasmid_assemblies_glob)
+    if len(plasmid_assembly_paths) == 0:
+        logging.warning(json.dumps({
+            "event_type": "no_plasmid_assemblies_found",
+            "sequencing_run_id": sequencing_run_id,
+            "plasmid_assemblies_glob": plasmid_assemblies_glob
+        }))
+        return None
+
+    for plasmid_assembly_path in plasmid_assembly_paths:
+        src_path = os.path.abspath(plasmid_assembly_path)
+        assembly_basename = os.path.basename(plasmid_assembly_path)
+        dest_path = os.path.join(assemblies_dir, assembly_basename)
+        try:
+            os.symlink(src_path, dest_path)
+        except OSError as e:
+            logging.error(json.dumps({
+                "event_type": "symlink_plasmid_assembly_failed",
+                "sequencing_run_id": sequencing_run_id,
+                "plasmid_assembly_path": plasmid_assembly_path,
+                "assembly_symlink_path": assembly_symlink_path
+            }))
+            continue
+
+    samplesheets_dir = os.path.join(analysis_run_output_dir, 'samplesheets')
+    os.makedirs(samplesheets_dir, exist_ok=True)
+
+    mlst_nf_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_mlst-nf_samplesheet.csv')
+    mlst_nf_samplesheet_fieldnames = [
+        'ID',
+        'ASSEMBLY',
+    ]
+    mlst_nf_samplesheet = []
+    with open(mlst_nf_samplesheet_path, 'w') as f:
+        writer = csv.DictWriter(f, fieldnames=mlst_nf_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+        writer.writeheader()
+        for plasmid_assembly_path in plasmid_assembly_paths:
+            assembly_basename = os.path.basename(plasmid_assembly_path)
+            sample_id = assembly_basename.split('_')[0]
+            mlst_nf_samplesheet.append({
+                'ID': sample_id,
+                'ASSEMBLY': os.path.abspath(plasmid_assembly_path),
+            })
+        
 
     return None
 
