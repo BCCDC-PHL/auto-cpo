@@ -458,17 +458,67 @@ def post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
         'ASSEMBLY',
     ]
     mlst_nf_samplesheet = []
+    
+    for plasmid_assembly_path in plasmid_assembly_paths:
+        assembly_basename = os.path.basename(plasmid_assembly_path)
+        sample_id = assembly_basename.split('_')[0]
+        mlst_nf_samplesheet.append({
+            'ID': sample_id,
+            'ASSEMBLY': os.path.abspath(plasmid_assembly_path),
+        })
+
     with open(mlst_nf_samplesheet_path, 'w') as f:
         writer = csv.DictWriter(f, fieldnames=mlst_nf_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
         writer.writeheader()
-        for plasmid_assembly_path in plasmid_assembly_paths:
-            assembly_basename = os.path.basename(plasmid_assembly_path)
-            sample_id = assembly_basename.split('_')[0]
-            mlst_nf_samplesheet.append({
-                'ID': sample_id,
-                'ASSEMBLY': os.path.abspath(plasmid_assembly_path),
-            })
-        
+        for record in mlst_nf_samplesheet:
+            writer.writerow(record)
+
+    logging.info(json.dumps({"event_type": "mlst_nf_samplesheet_written", "sequencing_run_id": sequencing_run_id, "mlst_nf_samplesheet_path": mlst_nf_samplesheet_path}))
+
+
+    plasmid_assembly_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-assembly_samplesheet.csv')
+
+    plasmid_screen_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-screen_samplesheet.csv')
+    plasmid_screen_samplesheet_fieldnames = [
+        'ID',
+        'R1',
+        'R2',
+        'ASSEMBLY',
+    ]
+    with open(plasmid_assembly_samplesheet_path, 'r') as assembly_samplesheet_f:
+        assembly_samplesheet_reader = csv.DictReader(assembly_samplesheet_f)
+        with open(plasmid_screen_samplesheet_path, 'w') as plasmid_screen_samplesheet_f:
+            plasmid_screen_samplesheet_writer = csv.DictWriter(plasmid_screen_samplesheet_f, fieldnames=plasmid_screen_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+            plasmid_screen_samplesheet_writer.writeheader()
+            for row in assembly_samplesheet_reader:
+                if not all([row['ID'], row['R1'], row['R2']]):
+                    logging.warning(json.dumps({
+                        "event_type": "missing_sample_info",
+                        "sequencing_run_id": sequencing_run_id,
+                        "sample_info": row
+                    }))
+                    continue
+                sample_id = row['ID']
+                reads_r1 = row['R1']
+                reads_r2 = row['R2']
+                assembly = None
+                for mlst_nf_samplesheet_record in mlst_nf_samplesheet:
+                    if mlst_nf_samplesheet_record['ID'] == sample_id:
+                        assembly = mlst_nf_samplesheet_record['ASSEMBLY']
+                        break
+                if not assembly:
+                    logging.warning(json.dumps({
+                        "event_type": "missing_assembly",
+                        "sequencing_run_id": sequencing_run_id,
+                        "sample_id": sample_id
+                    }))
+                    continue
+                plasmid_screen_samplesheet_writer.writerow({
+                    'ID': sample_id,
+                    'R1': reads_r1,
+                    'R2': reads_r2,
+                    'ASSEMBLY': assembly,
+                })
 
     return None
 
