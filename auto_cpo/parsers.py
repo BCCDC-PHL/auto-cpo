@@ -70,3 +70,57 @@ def parse_basic_qc_stats(basic_qc_stats_csv_path: Path) -> dict:
             }))
 
     return basic_qc_stats_by_library
+
+
+def parse_basic_nanopore_qc_stats(basic_nanopore_qc_stats_csv_path: Path) -> dict:
+    """
+    Parse the basic nanopore sequence qc stats file
+
+    :param basic_nanopore_qc_stats_csv: The input basic nanopore sequence qc stats file (csv)
+    :type basic_nanopore_qc_stats_csv: Path
+    :return: The parsed basic nanopore sequence qc stats
+    :rtype: dict
+    """
+    basic_qc_stats_by_library = {}
+    int_fields = [
+        'reads',
+        'bases',
+        'n50',
+        'longest',
+        'shortest',
+        'mean_length',
+        'median_length',
+    ]
+    float_fields = [
+        'mean_quality',
+        'median_quality',
+    ]
+    with open(basic_nanopore_qc_stats_csv_path, 'r') as f:
+        reader = csv.DictReader(f, dialect='unix')
+        for row in reader:
+            library_id = row['sample_id']
+            for field in int_fields:
+                try:
+                    row[field] = int(row[field])
+                except ValueError as e:
+                    row[field] = None
+            for field in float_fields:
+                try:
+                    row[field] = float(row[field])
+                except ValueError as e:
+                    row[field] = None
+
+            basic_qc_stats_by_library[library_id] = {
+                "library_id": library_id,
+                "reads": row['reads'],
+                "bases": row['bases'],
+                "n50": row['n50'],
+                "longest": row['longest'],
+                "shortest": row['shortest'],
+                "mean_length": row['mean_length'],
+                "median_length": row['median_length'],
+                "mean_quality": row['mean_quality'],
+                "median_quality": row['median_quality'],
+            }
+
+    return basic_qc_stats_by_library

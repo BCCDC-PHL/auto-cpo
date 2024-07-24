@@ -46,7 +46,7 @@ def build_pipeline_command(config, pipeline):
     return pipeline_command
 
 
-def run_pipeline(config, pipeline, run):
+def run_pipeline(config, pipeline, run, analysis_mode):
     """
     Run a pipeline.
 
@@ -56,6 +56,8 @@ def run_pipeline(config, pipeline, run):
     :type run: dict
     :param pipeline: The pipeline dictionary
     :type pipeline: dict
+    :param analysis_mode: The analysis mode
+    :type analysis_mode: str
     :return: None
     :rtype: None
     """

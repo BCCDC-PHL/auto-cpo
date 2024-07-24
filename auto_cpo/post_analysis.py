@@ -9,7 +9,7 @@ import shutil
 from . import parsers
 
 
-def post_analysis_basic_sequence_qc(config, pipeline, run):
+def post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the basic-sequence-qc pipeline. This includes generating:
     - A sample QC summary CSV file
@@ -32,7 +32,7 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         "run": run,
     }))
     sequencing_run_id = run['sequencing_run_id']
-    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
     pipeline_short_name = pipeline['name'].split('/')[1]
     pipeline_minor_version = ''.join(pipeline['version'].rsplit('.', 1)[0])
     analysis_pipeline_output_dir = pipeline.get('parameters', {}).get('outdir', None)
@@ -41,8 +41,11 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         "sequencing_run_id": sequencing_run_id,
         "analysis_pipeline_output_dir": analysis_pipeline_output_dir
     }))
-    basic_qc_stats_csv_path = None
-    basic_qc_stats_csv_path = os.path.join(analysis_pipeline_output_dir, sequencing_run_id + '_basic_qc_stats.csv')
+
+    basic_qc_stats_csv_path = os.path.join(
+        analysis_pipeline_output_dir,
+        sequencing_run_id + '_basic_qc_stats.csv'
+    )
     basic_sequence_qc = {}
     if not basic_qc_stats_csv_path or not os.path.exists(basic_qc_stats_csv_path):
         logging.warning(json.dumps({
@@ -70,7 +73,10 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         'q30_percent_after_filtering',
         'q30_percent_qc_status',
     ]
-    sample_qc_summary_path = os.path.join(analysis_run_output_dir, sequencing_run_id + "_auto-cpo_sample_qc_summary.csv")
+    sample_qc_summary_path = os.path.join(
+        analysis_run_output_dir,
+        sequencing_run_id + "_auto-cpo_sample_qc_summary.csv"
+    )
     with open(sample_qc_summary_path, 'w') as f:
         writer = csv.DictWriter(f, fieldnames=sample_qc_output_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
         writer.writeheader()
@@ -155,11 +161,108 @@ def post_analysis_basic_sequence_qc(config, pipeline, run):
         }
         assembly_writer.writerow(assembly_samplesheet)
         taxon_abundance_writer.writerow(assembly_samplesheet)
+
+    assembly_samplesheet_f.close()
+    taxon_abundance_samplesheet_f.close()
+
+    return None
+
+
+def post_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode):
+    """
+    Perform post-analysis tasks for the basic-nanopore-qc pipeline.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: None
+    :rtype: None
+    """
+    logging.info(json.dumps({
+        "event_type": "post_analysis_started",
+        "sequencing_run_id": run['sequencing_run_id'],
+        "pipeline": pipeline,
+        "run": run,
+    }))
+    sequencing_run_id = run['sequencing_run_id']
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
+
+    pipeline_short_name = pipeline['name'].split('/')[1]
+    pipeline_minor_version = ''.join(pipeline['version'].rsplit('.', 1)[0])
+    analysis_pipeline_output_dir = pipeline.get('parameters', {}).get('outdir', None)
+    logging.debug(json.dumps({
+        "event_type": "analysis_pipeline_output_dir",
+        "sequencing_run_id": sequencing_run_id,
+        "analysis_pipeline_output_dir": analysis_pipeline_output_dir
+    }))
+
+    basic_qc_stats_csv_path = os.path.join(
+        analysis_pipeline_output_dir,
+        sequencing_run_id + '_basic_qc_stats.csv'
+    )
+    basic_sequence_qc = {}
+    if not basic_qc_stats_csv_path or not os.path.exists(basic_qc_stats_csv_path):
+        logging.warning(json.dumps({
+            "event_type": "basic_qc_stats_file_not_found",
+            "sequencing_run_id": sequencing_run_id,
+            "basic_qc_stats_csv_path": basic_qc_stats_csv_path
+        }))
+        return None
+
+    logging.debug(json.dumps({
+        "event_type": "basic_qc_stats_file_found",
+        "sequencing_run_id": sequencing_run_id,
+        "basic_qc_stats_csv_path": basic_qc_stats_csv_path
+    }))
+    basic_qc_stats_by_library = parsers.parse_basic_nanopore_qc_stats(basic_qc_stats_csv_path)
+
+    samplesheets_dir = os.path.join(analysis_run_output_dir, 'samplesheets')
+    os.makedirs(samplesheets_dir, exist_ok=True)
+
+    assembly_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-assembly_samplesheet.csv')
+    fastq_by_run_dir = config['fastq_by_run_dir']
+    run_fastq_dir = os.path.join(fastq_by_run_dir, sequencing_run_id)
+    assembly_samplesheet_fieldnames = [
+        'ID',
+        'R1',
+        'R2',
+        'LONG',
+    ]
+    with open(assembly_samplesheet_path, 'w') as f:
+        writer = csv.DictWriter(f, fieldnames=assembly_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+        writer.writeheader()
+        for library_id, qc_stats in basic_qc_stats_by_library.items():
+            r1_fastq_glob = os.path.join(fastq_by_run_dir, '*', library_id + '_R1*.fastq.gz')
+            r2_fastq_glob = os.path.join(fastq_by_run_dir, '*', library_id + '_R2*.fastq.gz')
+            rl_fastq_glob = os.path.join(run_fastq_dir, library_id + '*_RL.fastq.gz')
+            r1_fastq_files = glob.glob(r1_fastq_glob)
+            r2_fastq_files = glob.glob(r2_fastq_glob)
+            rl_fastq_files = glob.glob(rl_fastq_glob)
+            if len(r1_fastq_files) == 0 or len(r2_fastq_files) == 0 or len(rl_fastq_files) == 0:
+                logging.warning(json.dumps({
+                    "event_type": "fastq_files_not_found",
+                    "sequencing_run_id": sequencing_run_id,
+                    "library_id": library_id,
+                    "r1_fastq_glob": r1_fastq_glob,
+                    "r2_fastq_glob": r2_fastq_glob,
+                    "rl_fastq_glob": rl_fastq_glob
+                }))
+                continue
+            samplesheet_record = {
+                'ID': library_id,
+                'R1': os.path.abspath(r1_fastq_files[-1]),
+                'R2': os.path.abspath(r2_fastq_files[-1]),
+                'LONG': os.path.abspath(rl_fastq_files[-1]),
+            }
+            writer.writerow(samplesheet_record)
     
     return None
 
 
-def post_analysis_taxon_abundance(config, pipeline, run):
+def post_analysis_taxon_abundance(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the taxon-abundance pipeline.
 
@@ -184,7 +287,7 @@ def post_analysis_taxon_abundance(config, pipeline, run):
     return None
 
 
-def post_analysis_routine_assembly(config, pipeline, run):
+def post_analysis_routine_assembly(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the routine-assembly pipeline.
 
@@ -205,9 +308,9 @@ def post_analysis_routine_assembly(config, pipeline, run):
         "run": run,
     }))
     sequencing_run_id = run['sequencing_run_id']
-    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id)
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
 
-    assembly_symlinks_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, 'assemblies')
+    assembly_symlinks_dir = os.path.join(analysis_run_output_dir, 'assemblies')
     os.makedirs(assembly_symlinks_dir, exist_ok=True)
 
     pipeline_short_name = pipeline['name'].split('/')[1]
@@ -298,7 +401,129 @@ def post_analysis_routine_assembly(config, pipeline, run):
     return None
 
 
-def post_analysis_mlst_nf(config, pipeline, run):
+def post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode):
+    """
+    Perform post-analysis tasks for the plasmid-assembly pipeline.
+
+    :param config: The config dictionary
+    :type config: dict
+    :param pipeline: The pipeline dictionary
+    :type pipeline: dict
+    :param run: The run dictionary
+    :type run: dict
+    :return: None
+    :rtype: None
+    """
+    logging.info(json.dumps({
+        "event_type": "post_analysis_started",
+        "sequencing_run_id": run['sequencing_run_id'],
+        "pipeline": pipeline,
+        "run": run,
+    }))
+    sequencing_run_id = run['sequencing_run_id']
+    analysis_run_output_dir = os.path.join(config['analysis_output_dir'], sequencing_run_id, analysis_mode)
+    assemblies_dir = os.path.join(analysis_run_output_dir, 'assemblies')
+    os.makedirs(assemblies_dir, exist_ok=True)
+    plasmid_assemblies_glob = os.path.join(analysis_run_output_dir, 'plasmid-assembly-*-output', 'BC*', 'BC*_plassembler_hybrid.fa')
+    plasmid_assembly_paths = glob.glob(plasmid_assemblies_glob)
+    if len(plasmid_assembly_paths) == 0:
+        logging.warning(json.dumps({
+            "event_type": "no_plasmid_assemblies_found",
+            "sequencing_run_id": sequencing_run_id,
+            "plasmid_assemblies_glob": plasmid_assemblies_glob
+        }))
+        return None
+
+    for plasmid_assembly_path in plasmid_assembly_paths:
+        src_path = os.path.abspath(plasmid_assembly_path)
+        assembly_basename = os.path.basename(plasmid_assembly_path)
+        dest_path = os.path.join(assemblies_dir, assembly_basename)
+        try:
+            os.symlink(src_path, dest_path)
+        except OSError as e:
+            logging.error(json.dumps({
+                "event_type": "symlink_plasmid_assembly_failed",
+                "sequencing_run_id": sequencing_run_id,
+                "plasmid_assembly_path": plasmid_assembly_path,
+                "assembly_symlink_path": assembly_symlink_path
+            }))
+            continue
+
+    samplesheets_dir = os.path.join(analysis_run_output_dir, 'samplesheets')
+    os.makedirs(samplesheets_dir, exist_ok=True)
+
+    mlst_nf_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_mlst-nf_samplesheet.csv')
+    mlst_nf_samplesheet_fieldnames = [
+        'ID',
+        'ASSEMBLY',
+    ]
+    mlst_nf_samplesheet = []
+    
+    for plasmid_assembly_path in plasmid_assembly_paths:
+        assembly_basename = os.path.basename(plasmid_assembly_path)
+        sample_id = assembly_basename.split('_')[0]
+        mlst_nf_samplesheet.append({
+            'ID': sample_id,
+            'ASSEMBLY': os.path.abspath(plasmid_assembly_path),
+        })
+
+    with open(mlst_nf_samplesheet_path, 'w') as f:
+        writer = csv.DictWriter(f, fieldnames=mlst_nf_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+        writer.writeheader()
+        for record in mlst_nf_samplesheet:
+            writer.writerow(record)
+
+    logging.info(json.dumps({"event_type": "mlst_nf_samplesheet_written", "sequencing_run_id": sequencing_run_id, "mlst_nf_samplesheet_path": mlst_nf_samplesheet_path}))
+
+
+    plasmid_assembly_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-assembly_samplesheet.csv')
+
+    plasmid_screen_samplesheet_path = os.path.join(samplesheets_dir, sequencing_run_id + '_plasmid-screen_samplesheet.csv')
+    plasmid_screen_samplesheet_fieldnames = [
+        'ID',
+        'R1',
+        'R2',
+        'ASSEMBLY',
+    ]
+    with open(plasmid_assembly_samplesheet_path, 'r') as assembly_samplesheet_f:
+        assembly_samplesheet_reader = csv.DictReader(assembly_samplesheet_f)
+        with open(plasmid_screen_samplesheet_path, 'w') as plasmid_screen_samplesheet_f:
+            plasmid_screen_samplesheet_writer = csv.DictWriter(plasmid_screen_samplesheet_f, fieldnames=plasmid_screen_samplesheet_fieldnames, dialect='unix', quoting=csv.QUOTE_MINIMAL, extrasaction='ignore')
+            plasmid_screen_samplesheet_writer.writeheader()
+            for row in assembly_samplesheet_reader:
+                if not all([row['ID'], row['R1'], row['R2']]):
+                    logging.warning(json.dumps({
+                        "event_type": "missing_sample_info",
+                        "sequencing_run_id": sequencing_run_id,
+                        "sample_info": row
+                    }))
+                    continue
+                sample_id = row['ID']
+                reads_r1 = row['R1']
+                reads_r2 = row['R2']
+                assembly = None
+                for mlst_nf_samplesheet_record in mlst_nf_samplesheet:
+                    if mlst_nf_samplesheet_record['ID'] == sample_id:
+                        assembly = mlst_nf_samplesheet_record['ASSEMBLY']
+                        break
+                if not assembly:
+                    logging.warning(json.dumps({
+                        "event_type": "missing_assembly",
+                        "sequencing_run_id": sequencing_run_id,
+                        "sample_id": sample_id
+                    }))
+                    continue
+                plasmid_screen_samplesheet_writer.writerow({
+                    'ID': sample_id,
+                    'R1': reads_r1,
+                    'R2': reads_r2,
+                    'ASSEMBLY': assembly,
+                })
+
+    return None
+
+
+def post_analysis_mlst_nf(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the mlst-nf pipeline.
 
@@ -323,7 +548,7 @@ def post_analysis_mlst_nf(config, pipeline, run):
     return None
 
 
-def post_analysis_plasmid_screen(config, pipeline, run):
+def post_analysis_plasmid_screen(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for the plasmid-screen pipeline.
 
@@ -348,7 +573,7 @@ def post_analysis_plasmid_screen(config, pipeline, run):
     return None
 
 
-def post_analysis(config, pipeline, run):
+def post_analysis(config, pipeline, run, analysis_mode):
     """
     Perform post-analysis tasks for a pipeline.
 
@@ -358,6 +583,8 @@ def post_analysis(config, pipeline, run):
     :type pipeline: dict
     :param run: The run dictionary
     :type run: dict
+    :param analysis_mode: The analysis mode
+    :type analysis_mode: str
     :return: None
     """
     pipeline_name = pipeline['name']
@@ -404,15 +631,19 @@ def post_analysis(config, pipeline, run):
             }))
 
     if pipeline_name == 'BCCDC-PHL/basic-sequence-qc':
-        return post_analysis_basic_sequence_qc(config, pipeline, run)
+        return post_analysis_basic_sequence_qc(config, pipeline, run, analysis_mode)
+    elif pipeline_name == 'BCCDC-PHL/basic-nanopore-qc':
+        return post_analysis_basic_nanopore_qc(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/taxon-abundance':
-        return post_analysis_taxon_abundance(config, pipeline, run)
+        return post_analysis_taxon_abundance(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/routine-assembly':
-        return post_analysis_routine_assembly(config, pipeline, run)
+        return post_analysis_routine_assembly(config, pipeline, run, analysis_mode)
+    elif pipeline_name == 'BCCDC-PHL/plasmid-assembly':
+        return post_analysis_plasmid_assembly(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/mlst-nf':
-        return post_analysis_mlst_nf(config, pipeline, run)
+        return post_analysis_mlst_nf(config, pipeline, run, analysis_mode)
     elif pipeline_name == 'BCCDC-PHL/plasmid-screen':
-        return post_analysis_plasmid_screen(config, pipeline, run)
+        return post_analysis_plasmid_screen(config, pipeline, run, analysis_mode)
     else:
         logging.warning(json.dumps({
             "event_type": "post_analysis_not_implemented",

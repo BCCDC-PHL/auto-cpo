@@ -62,12 +62,15 @@ def main():
                         logging.error(json.dumps({"event_type": "load_config_failed", "config_file": os.path.abspath(args.config)}))
                     if run['instrument_type'] == 'illumina':
                         core.analyze_run(config, run, "short")
+                    elif run['instrument_type'] == 'nanopore':
+                        core.analyze_run(config, run, "hybrid")
                 if quit_when_safe:
                     exit(0)
             scan_complete_timestamp = datetime.datetime.now()
             scan_duration_delta = scan_complete_timestamp - scan_start_timestamp
             scan_duration_seconds = scan_duration_delta.total_seconds()
-            logging.info(json.dumps({"event_type": "scan_complete", "scan_duration_seconds": scan_duration_seconds}))
+            next_scan_timestamp = scan_start_timestamp + datetime.timedelta(seconds=scan_interval)
+            logging.info(json.dumps({"event_type": "scan_complete", "scan_duration_seconds": scan_duration_seconds, "timestamp_next_scan_start": next_scan_timestamp.isoformat()}))
 
             if quit_when_safe:
                 exit(0)
