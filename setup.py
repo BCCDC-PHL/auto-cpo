@@ -3,7 +3,7 @@ from setuptools import setup, find_namespace_packages
 
 setup(
     name='auto-cpo',
-    version='0.2.0',
+    version='0.2.1',
     packages=find_namespace_packages(),
     entry_points={
         "console_scripts": [
@@ -15,7 +15,7 @@ setup(
     },
     install_requires=[
     ],
-    description=' Automated analysis of carbapenemase-producing organism (CPO) sequence data',
+    description='Automated analysis of carbapenemase-producing organism (CPO) sequence data',
     url='https://github.com/BCCDC-PHL/auto-cpo',
     author='Dan Fornika',
     author_email='dan.fornika@bccdc.ca',
