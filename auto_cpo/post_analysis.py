@@ -378,7 +378,7 @@ def post_analysis_routine_assembly(config, pipeline, run, analysis_mode):
             plasmid_screen_samplesheet.append(row)
 
     for plasmid_screen_samplesheet_record in plasmid_screen_samplesheet:
-        sample_id = record['ID']
+        sample_id = plasmid_screen_samplesheet_record['ID']
         for mlst_nf_samplesheet_record in mlst_nf_samplesheet:
             if mlst_nf_samplesheet_record['ID'] == sample_id:
                 plasmid_screen_samplesheet_record['ASSEMBLY'] = mlst_nf_samplesheet_record['ASSEMBLY']
