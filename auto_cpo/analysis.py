@@ -32,7 +32,7 @@ def build_pipeline_command(config, pipeline):
             '-with-timeline', pipeline['parameters']['timeline_path'],
     ]
     pipeline['parameters'].pop('log_path', None)
-    pipeline['parameters'].pop('work_dir', None)
+    work_dir = pipeline['parameters'].pop('work_dir', None)
     pipeline['parameters'].pop('report_path', None)
     pipeline['parameters'].pop('trace_path', None)
     pipeline['parameters'].pop('timeline_path', None)
@@ -42,6 +42,8 @@ def build_pipeline_command(config, pipeline):
             pipeline_command += ['--' + flag]
         else:
             pipeline_command += ['--' + flag, value]
+
+    pipeline['parameters']['work_dir'] = work_dir
     
     return pipeline_command
 
@@ -69,14 +71,15 @@ def run_pipeline(config, pipeline, run, analysis_mode):
     pipeline_command_str = list(map(str, pipeline_command))
 
     sequencing_run_id = run['sequencing_run_id']
-    
+    analysis_work_dir = pipeline['parameters']['work_dir']
     try:
+        os.makedirs(analysis_work_dir)
         logging.info(json.dumps({
             "event_type": "analysis_started",
             "sequencing_run_id": sequencing_run_id,
             "pipeline_command": pipeline_command_str
         }))
-        analysis_result = subprocess.run(pipeline_command_str, capture_output=True, check=True)
+        analysis_result = subprocess.run(pipeline_command_str, capture_output=True, check=True, cwd=analysis_work_dir)
         analysis_tracking["timestamp_analysis_complete"] = datetime.datetime.now().isoformat()
         analysis_complete_path = os.path.join(pipeline['parameters']['outdir'], 'analysis_complete.json')
         with open(analysis_complete_path, 'w') as f:
