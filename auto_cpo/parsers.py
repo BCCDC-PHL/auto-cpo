@@ -5,6 +5,18 @@ import logging
 from pathlib import Path
 
 
+def parse_generic_csv(csv_path: Path):
+    """
+    """
+    rows = []
+    with open(csv_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            rows.append(row)
+
+    return rows
+
+
 def parse_basic_qc_stats(basic_qc_stats_csv_path: Path) -> dict:
     """
     Parse the basic sequence qc stats file
@@ -124,3 +136,83 @@ def parse_basic_nanopore_qc_stats(basic_nanopore_qc_stats_csv_path: Path) -> dic
             }
 
     return basic_qc_stats_by_library
+
+
+def parse_auto_cpo_sample_qc_summary(summary_path: Path):
+    """
+    """
+    parsed_summary_by_library = {}
+    int_fields = [
+        'total_bases_input',
+        'filtered_bases_input',
+    ]
+    float_fields = [
+        'pre_alignment_estimated_depth_coverage_per_mb',
+    ]
+    with open(summary_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            library_id = row['library_id']
+            for field in int_fields:
+                try:
+                    row[field] = int(row[field])
+                except ValueError as e:
+                    row[field] = None
+            for field in float_fields:
+                try:
+                    row[field] = float(row[field])
+                except ValueError as e:
+                    row[field] = None
+            parsed_summary_by_library[library_id] = row
+
+    return parsed_summary_by_library
+
+
+def parse_bracken_abundances_top_5(abundances_path: Path):
+    """
+    """
+    int_fields = [
+        'abundance_1_num_assigned_reads',
+        'abundance_2_num_assigned_reads',
+        'abundance_3_num_assigned_reads',
+        'abundance_4_num_assigned_reads',
+        'abundance_4_num_assigned_reads',
+        'abundance_5_num_assigned_reads',
+        'unclassified_num_assigned_reads',
+    ]
+    float_fields = [
+        'abundance_1_fraction_total_reads',
+        'abundance_2_fraction_total_reads',
+        'abundance_3_fraction_total_reads',
+        'abundance_4_fraction_total_reads',
+        'abundance_5_fraction_total_reads',
+        'unclassified_fraction_total_reads',
+        
+    ]
+    top_5_abundances_by_library = {}
+    with open(abundances_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            library_id = row['sample_id']
+            for field in int_fields:
+                try:
+                    row[field] = int(row[field])
+                except ValueError as e:
+                    row[field] = None
+            for field in float_fields:
+                try:
+                    row[field] = float(row[field])
+                except ValueError as e:
+                    row[field] = None
+
+            top_5_abundances_by_library[library_id] = row
+
+    return top_5_abundances_by_library
+
+
+def parse_mlst_sequence_type(mlst_sequence_type_path):
+    """
+    """
+    mlst_sequence_type = parse_generic_csv(mlst_sequence_type_path)
+
+    return mlst_sequence_type
