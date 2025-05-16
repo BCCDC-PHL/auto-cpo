@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import glob
 import json
 import logging
 import os
@@ -86,7 +87,7 @@ def _prepare_email_body(email_data: dict, notification_config: dict):
     }
 
     return email_request_body
-    
+
 
 def _collect_email_data(analysis_dir):
     """
@@ -130,17 +131,88 @@ def _collect_email_data(analysis_dir):
         mlst_sequence_type_path = Path(os.path.join(analysis_dir, 'mlst-nf-v0.1-output', library_id, f"{library_id}_sequence_type.csv"))
         if os.path.exists(mlst_sequence_type_path):
             sequence_type_records = parsers.parse_mlst_sequence_type(mlst_sequence_type_path)
-            sequence_type = ' '.join([
+            sequence_type = ':'.join([
                 sequence_type_records[0]['scheme'],
                 sequence_type_records[0]['sequence_type'],
             ])
             libraries_by_library_id[library_id]['mlst'] = sequence_type
 
-    
+    for library_id in libraries_by_library_id.keys():
+        abricate_ncbi_path = Path(os.path.join(analysis_dir, 'plasmid-screen-v0.2-output', library_id, f"{library_id}_abricate_ncbi.tsv"))
+        if os.path.exists(abricate_ncbi_path):
+            abricate_records = parsers.parse_abricate(abricate_ncbi_path)
+            carbapenemase_genes = []
+            for abricate_record in abricate_records:
+                if abricate_record['resistance'] == 'CARBAPENEM':
+                    carbapenemase_genes.append(abricate_record['gene'])
+            libraries_by_library_id[library_id]['carbapenemase_genes'] = carbapenemase_genes
 
+    plasmids_by_library_id = {}
+    resistance_gene_report_glob = os.path.join(analysis_dir, 'plasmid-screen-v0.*-output', '*', '*_resistance_gene_report.tsv')
+    for resistance_gene_report_path in glob.glob(resistance_gene_report_glob):
+        resistance_gene_report = parsers.parse_resistance_gene_report(Path(resistance_gene_report_path))
+        for resistance_gene_report_record in resistance_gene_report:
+            library_id = resistance_gene_report_record['sample_id']
+            if library_id not in plasmids_by_library_id:
+                plasmids_by_library_id[library_id] = []
+
+            
+            primary_cluster_id = resistance_gene_report_record['mob_suite_primary_cluster_id']
+            secondary_cluster_id = resistance_gene_report_record['mob_suite_secondary_cluster_id']
+            plasmid_cluster_id = ':'.join([primary_cluster_id, secondary_cluster_id])
+            if 'chrom' in resistance_gene_report_record['assembly_file']:
+                plasmid_cluster_id = '(on chromosome)'
+            
+            plasmid = {}
+            plasmid['library_id'] = library_id
+            plasmid['cluster_id'] = plasmid_cluster_id
+            closest_db_plasmid = resistance_gene_report_record['mash_nearest_neighbor']
+            if closest_db_plasmid == '-':
+                closest_db_plasmid = 'N/A'
+            plasmid['closest_db_plasmid'] = closest_db_plasmid
+            reconstruction_size = resistance_gene_report_record['plasmid_reconstruction_size']
+            if reconstruction_size:
+                reconstruction_size_formatted = f"{reconstruction_size:,d}"
+            else:
+                reconstruction_size_formatted = 'N/A'
+            plasmid['size_bp'] = reconstruction_size_formatted
+            plasmid['num_contigs'] = resistance_gene_report_record['num_contigs_in_plasmid_reconstruction']
+            percent_ref_coverage = resistance_gene_report_record['percent_ref_plasmid_coverage_above_depth_threshold']
+            if percent_ref_coverage:
+                percent_ref_coverage_formatted = f"{round(percent_ref_coverage, 1)}%"
+            else:
+                percent_ref_coverage_formatted = 'N/A'
+            plasmid['percent_ref_coverage'] = percent_ref_coverage_formatted
+
+            # We sometimes see multiple carbapenemase genes on one plasmid.
+            # First check if this plasmid has already been seen for this library.
+            # If so, just add the carbapenemase gene to the plasmid
+            carbapenemase_gene = resistance_gene_report_record['resistance_gene_id']
+            seen_plasmid_cluster_ids = [p['cluster_id'] for p in plasmids_by_library_id[library_id]]
+            if plasmid_cluster_id not in seen_plasmid_cluster_ids:
+                plasmid['carbapenemase_genes'] = [carbapenemase_gene]
+                plasmids_by_library_id[library_id].append(plasmid)
+            else:
+                for plasmid in plasmids_by_library_id[library_id]:
+                    if plasmid['cluster_id'] == plasmid_cluster_id:
+                        plasmid['carbapenemase_genes'].append(carbapenemase_gene)
+                
+        
+    
     email_data['libraries'] = []
-    for library_id, library_data in libraries_by_library_id.items():
+    library_ids_sorted = list(sorted(libraries_by_library_id.keys()))
+    for library_id in library_ids_sorted:
+        library_data = libraries_by_library_id[library_id]
         email_data['libraries'].append(library_data)
+
+
+    email_data['plasmids'] = []
+    library_ids_sorted = list(sorted(plasmids_by_library_id.keys()))
+    for library_id in library_ids_sorted:
+        plasmids = plasmids_by_library_id[library_id]
+        for plasmid in plasmids:
+            email_data['plasmids'].append(plasmid)
+        
 
     return email_data
     

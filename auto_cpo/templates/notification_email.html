@@ -16,6 +16,7 @@
       text-align: left;
     }
     th {
+      color: #004a87;
       background-color: #f2f2f2;
     }
     .qc-pass { color: green; font-weight: bold; }
@@ -65,7 +66,10 @@
         <th>Library ID</th>
         <th>Plasmid Cluster ID</th>
 	<th>Closest DB Plasmid</th>
-	<th>Carbapenemase Gene</th>
+	<th style="text-align:right;">Percent Ref Plasmid Coverage (at 10x Depth)</th>
+	<th>Carbapenemase Gene(s)</th>
+	<th style="text-align:right;">Plasmid Reconstruction Size (bp)</th>
+	<th style="text-align:right;">Num. Contigs</th>
       </tr>
     </thead>
     <tbody>
@@ -74,11 +78,16 @@
         <td>{{ plasmid.library_id }}</td>
 	<td>{{ plasmid.cluster_id }}</td>
 	<td>{{ plasmid.closest_db_plasmid }}</td>
-	<td>{{ plasmid.carbapenemase }}</td>
+	<td style="text-align:right;">{{ plasmid.percent_ref_coverage }}</td>
+	<td>{{ plasmid.carbapenemase_genes | join(', ') }}</td>
+	<td style="text-align:right;">{{ plasmid.size_bp }}</td>
+	<td style="text-align:right;">{{ plasmid.num_contigs or 'N/A' }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <h3>Analysis Metadata</h3>
 
   <p>
     Please  contact the bioinformatics team if you have any questions.

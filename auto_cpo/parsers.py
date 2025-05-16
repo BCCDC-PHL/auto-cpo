@@ -5,16 +5,42 @@ import logging
 from pathlib import Path
 
 
-def parse_generic_csv(csv_path: Path):
+def parse_generic_csv(csv_path: Path, delimiter=',', fieldname_translation={}, int_fields=[], float_fields=[]):
     """
-    """
-    rows = []
-    with open(csv_path, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append(row)
+    Parse a csv file to a list of dicts. Optionally cast int and float fields to those types.
+    Optionally translate fieldnames via a lookup table. Translation is done after casting, so
+    fields listed in the `int_fields` and `float_fields` args should reflect the fieldnames
+    in the original file (pre-translation, if applicable).
 
-    return rows
+    `fieldname_translation` is a dict from original fieldname to translated fieldname.
+    """
+    parsed_rows = []
+    with open(csv_path, 'r') as f:
+        reader = csv.DictReader(f, delimiter=delimiter)
+        for row in reader:
+            parsed_row = {}
+            for field, value in row.items():
+                if field in int_fields:
+                    try:
+                        parsed_row[field] = int(value)
+                    except ValueError as e:
+                        parsed_row[field] = None
+                elif field in float_fields:
+                    try:
+                        parsed_row[field] = float(value)
+                    except ValueError as e:
+                        parsed_row[field] = None
+                else:
+                    parsed_row[field] = value
+
+            for original_fieldname, translated_fieldname in fieldname_translation.items():
+                if original_fieldname in parsed_row:
+                    value = parsed_row.pop(original_fieldname)
+                    parsed_row[translated_fieldname] = value
+
+            parsed_rows.append(parsed_row)
+
+    return parsed_rows
 
 
 def parse_basic_qc_stats(basic_qc_stats_csv_path: Path) -> dict:
@@ -216,3 +242,79 @@ def parse_mlst_sequence_type(mlst_sequence_type_path):
     mlst_sequence_type = parse_generic_csv(mlst_sequence_type_path)
 
     return mlst_sequence_type
+
+
+def parse_abricate(abricate_report_path):
+    """
+    """
+    abricate_records = []
+    int_fields = [
+        'start',
+        'end',
+    ]
+    float_fields = [
+        'percent_coverage',
+        'percent_identity',
+    ]
+    with open(abricate_report_path, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        for row in reader:
+            abricate_record = {}
+            for k, v in row.items():
+                fieldname = k.lower().replace('#', '').replace('%', 'percent_')
+                abricate_record[fieldname] = v
+            for field in int_fields:
+                try:
+                    abricate_record[field] = int(abricate_record[field])
+                except ValueError as e:
+                    abricate_record[field] = None
+            for field in float_fields:
+                try:
+                    abricate_record[field] = float(abricate_record[field])
+                except ValueError as e:
+                    abricate_record[field] = None
+            abricate_records.append(abricate_record)
+
+    return abricate_records
+
+
+def parse_resistance_gene_report(resistance_gene_report_path: Path):
+    """
+    """
+    int_fields = [
+        'resistance_gene_contig_size',
+        'resistance_gene_contig_position_start',
+        'resistance_gene_contig_position_end',
+        'num_contigs_in_plasmid_reconstruction',
+        'plasmid_reconstruction_size',
+        'depth_coverage_threshold',
+        'num_snps_vs_ref_plasmid'
+    ]
+    float_fields = [
+        'percent_resistance_gene_coverage',
+        'percent_resistance_gene_identity',
+        'mash_neighbor_distance',
+        'percent_ref_plasmid_coverage_above_depth_threshold',
+    ]
+
+    parsed_resistance_gene_report = parse_generic_csv(
+        resistance_gene_report_path,
+        delimiter='\t',
+        int_fields=int_fields,
+        float_fields=float_fields,
+    )
+
+    # We have an issue in the plasmid-screen pipeline that 
+    # causes duplicate records in the resistance gene report.
+    # This occurs when multiple carbapenemase genes are found
+    # On the same plasmid.
+    
+    deduplicated_resistance_gene_report = []
+    for record in parsed_resistance_gene_report:
+        if record not in deduplicated_resistance_gene_report:
+            deduplicated_resistance_gene_report.append(record)
+
+    return deduplicated_resistance_gene_report
+            
+    
+            
