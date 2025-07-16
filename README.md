@@ -27,19 +27,23 @@ This tool takes a single config file, in JSON format, with the following structu
     "analysis_output_dir": "/path/to/analysis_by_run",
     "analysis_work_dir": "/path/to/auto-cpo-work",
     "conda_cache_dir": "/path/to/.conda/envs",
-    "notification_email_addresses": [
-	"someone@example.org"
+	"notification": {
+	    "system_config_file": "/path/to/config.json",
+		"recipent_email_addresses": [
+		    "someone@example.org",
+			"someone.else@example.org
+		],
+		"send_notification_emails": true
     ],
-    "send_notification_emails": false,
     "scan_interval_seconds": 3600,
     "analyze_runs_in_reverse_order": true,
     "qc_filters": {
-	"samples": {
-	    "minimum_pre_alignment_estimated_depth_coverage_per_mb": 250,
-	    "warning_pre_alignment_estimated_depth_coverage_per_mb": 300,
-	    "minimum_q30_percent_before_filtering": 75,
-	    "warning_q30_percent_before_filtering": 80
-	}
+	    "samples": {
+	        "minimum_pre_alignment_estimated_depth_coverage_per_mb": 250,
+	        "warning_pre_alignment_estimated_depth_coverage_per_mb": 300,
+	        "minimum_q30_percent_before_filtering": 75,
+	        "warning_q30_percent_before_filtering": 80
+	    }
     },
     "pipelines_by_analysis_mode": {
 	"short": [
