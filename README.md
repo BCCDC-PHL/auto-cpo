@@ -34,6 +34,7 @@ This tool takes a single config file, in JSON format, with the following structu
                     "someone.else@example.org"
 		],
 		"send_notification_emails": true
+        }
     ],
     "scan_interval_seconds": 3600,
     "analyze_runs_in_reverse_order": true,
