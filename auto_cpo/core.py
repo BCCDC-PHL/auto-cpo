@@ -16,6 +16,8 @@ import auto_cpo.pre_analysis as pre_analysis
 import auto_cpo.analysis as analysis
 import auto_cpo.post_analysis as post_analysis
 
+from auto_cpo.notification import send_notification_email
+
 
 def find_fastq_dirs(config, check_symlinks_complete=True):
     """
@@ -146,14 +148,18 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode
 
     :param config:
     :type config: dict[str, object]
-    :param run: Dictionary describing the run to be analyzed. Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
-    :type run: dict[str, object] Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
+    :param run: Dictionary describing the run to be analyzed.
+                Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
+    :type run: dict[str, object]
+               Keys: ['sequencing_run_id', 'fastq_directory', 'instrument_type', 'analysis_parameters']
     :param analysis_type: The type of analysis to perform. Default is 'short', alternative is 'hybrid'.
     :type analysis_mode: str
     :return: None
     :rtype: NoneType
     """
     sequencing_run_id = run['sequencing_run_id']
+    top_level_analysis_output_dir = config['analysis_output_dir']
+    
     for pipeline in config['pipelines_by_analysis_mode'][analysis_mode]:
         if pipeline is None:
             logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "pipeline_not_found"}))
@@ -192,3 +198,6 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode
         else:
             logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "analysis_preparation_failed"}))
             continue
+
+    run_analysis_outdir = os.path.join(top_level_analysis_output_dir, sequencing_run_id, analysis_mode)
+    send_notification_email(run_analysis_outdir, config['notification'])
