@@ -202,7 +202,6 @@ def parse_bracken_abundances_top_5(abundances_path: Path):
         'abundance_2_num_assigned_reads',
         'abundance_3_num_assigned_reads',
         'abundance_4_num_assigned_reads',
-        'abundance_4_num_assigned_reads',
         'abundance_5_num_assigned_reads',
         'unclassified_num_assigned_reads',
     ]
