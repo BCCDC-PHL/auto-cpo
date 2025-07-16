@@ -183,6 +183,21 @@ This tool takes a single config file, in JSON format, with the following structu
 }
 ```
 
+## Notification Configuration
+
+The `notification` section of the main config includes a `system_config_file` key that refers to a separate config file that is specific to the
+notification system. We expect the following fields to be included in that config:
+
+```json
+{
+    "auth_url": "https://notification.service/oauth2/token",
+    "email_url": "https://notification.service/email",
+    "client_id": "abc123abc123",
+    "client_secret": "abc123s3cr3t",
+    "sender_email": "do-not-reply@institution.org"
+}
+```
+
 # Logging
 This tool outputs [structured logs](https://www.honeycomb.io/blog/structured-logging-and-your-team/) in [JSON Lines](https://jsonlines.org/) format:
 
