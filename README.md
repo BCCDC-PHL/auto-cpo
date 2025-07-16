@@ -31,7 +31,7 @@ This tool takes a single config file, in JSON format, with the following structu
 	    "system_config_file": "/path/to/config.json",
 		"recipent_email_addresses": [
 		    "someone@example.org",
-			"someone.else@example.org
+                    "someone.else@example.org"
 		],
 		"send_notification_emails": true
     ],
