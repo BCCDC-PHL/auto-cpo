@@ -315,6 +315,35 @@ def parse_resistance_gene_report(resistance_gene_report_path: Path):
             deduplicated_resistance_gene_report.append(record)
 
     return deduplicated_resistance_gene_report
-            
-    
-            
+
+
+def parse_quast(quast_report_path: Path):
+    """
+    """
+    int_fields = [
+        'total_length',
+        'num_contigs',
+        'largest_contig',
+        'assembly_N50',
+        'assembly_N75',
+        'assembly_L50',
+        'assembly_L75',
+        'num_contigs_gt_0_bp',
+        'num_contigs_gt_1000_bp',
+        'num_contigs_gt_5000_bp',
+        'num_contigs_gt_10000_bp',
+        'num_contigs_gt_25000_bp',
+        'num_contigs_gt_50000_bp',
+        'total_length_gt_0_bp',
+        'total_length_gt_1000_bp',
+        'total_length_gt_5000_bp',
+        'total_length_gt_10000_bp',
+        'total_length_gt_25000_bp',
+        'total_length_gt_50000_bp',
+    ]
+    float_fields = [
+        'num_N_per_100_kb'
+    ]
+    quast_report = parse_generic_csv(quast_report_path, int_fields=int_fields, float_fields=float_fields)
+
+    return quast_report

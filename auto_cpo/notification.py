@@ -19,7 +19,6 @@ import auto_cpo.parsers as parsers
 from auto_cpo.config import load_config
 
 
-
 def _get_access_token(email_config: dict):
     """
     Get an access token from the MCMS auth service.
@@ -27,7 +26,8 @@ def _get_access_token(email_config: dict):
     :param config: A dict containing the MCMS auth service URL, client ID, and client secret.
                    Required keys are: ['auth_url', 'client_id', 'client_secret'].
     :type config: dict
-    :return: A dict containing the access token and other info. Keys are: ['access_token', 'token_type', 'expires_in', 'timestamp_token_received'].
+    :return: A dict containing the access token and other info.
+             Keys are: ['access_token', 'token_type', 'expires_in', 'timestamp_token_received'].
     :rtype: dict
     """
     auth_url = email_config['auth_url']
@@ -50,7 +50,11 @@ def _get_access_token(email_config: dict):
         timestamp = datetime.datetime.now().isoformat()
         response_json['timestamp_token_received'] = timestamp
     else:
-        logging.error(json.dumps({'event_type': 'email_authentication_failed', 'status_code': response.status_code, 'message': response.text}))
+        logging.error(json.dumps({
+            'event_type': 'email_authentication_failed',
+            'status_code': response.status_code,
+            'message': response.text
+        }))
         return None
 
     access_token = response_json['access_token']
@@ -67,7 +71,7 @@ def _prepare_email_body(email_data: dict, notification_config: dict):
     sequencing_run_id = email_data['sequencing_run_id']
     subject = f"[auto-cpo] Analysis Complete: {sequencing_run_id}"
 
-    template_path = files("auto_cpo.templates").joinpath("notification_email.html")
+    template_path = files("auto_cpo.templates").joinpath("analysis_complete_email.html")
     template_text = template_path.read_text()
 
     env = Environment(loader=BaseLoader())
@@ -115,7 +119,11 @@ def _collect_email_data(analysis_dir):
         else:
             libraries_by_library_id[library_id]['qc_status'] = 'Fail'
 
-    taxon_abundance_top_5_path = Path(os.path.join(analysis_dir, 'taxon-abundance-v0.1-output', f"{sequencing_run_id}_S_bracken_abundances_top_5.csv"))
+    taxon_abundance_top_5_path = Path(os.path.join(
+        analysis_dir,
+        'taxon-abundance-v0.1-output',
+        f"{sequencing_run_id}_S_bracken_abundances_top_5.csv"
+    ))
     taxon_abundance_top_5_by_library_id = parsers.parse_bracken_abundances_top_5(taxon_abundance_top_5_path)
 
     for library_id, taxon_abundance_top_5 in taxon_abundance_top_5_by_library_id.items():
@@ -126,9 +134,30 @@ def _collect_email_data(analysis_dir):
         species_percentage = f"{most_abundant_species} ({most_abundant_percent}%)"
         libraries_by_library_id[library_id]['species_percentage'] = species_percentage
 
-    
     for library_id in libraries_by_library_id.keys():
-        mlst_sequence_type_path = Path(os.path.join(analysis_dir, 'mlst-nf-v0.1-output', library_id, f"{library_id}_sequence_type.csv"))
+        assembly_qc_path = Path(os.path.join(
+            analysis_dir,
+            'routine-assembly-v0.4-output',
+            library_id,
+            f"{library_id}_unicycler_short_quast.csv",
+        ))
+        if os.path.exists(assembly_qc_path):
+            assembly_qc = parsers.parse_quast(assembly_qc_path)
+            assembly_size = assembly_qc[0]['total_length']
+            assembly_size_mb = round(assembly_size / 1_000_000, 3)
+            libraries_by_library_id[library_id]['assembly_size_mb'] = assembly_size_mb
+
+            num_contigs = assembly_qc[0]['num_contigs']
+            libraries_by_library_id[library_id]['assembly_num_contigs'] = num_contigs
+
+        
+    for library_id in libraries_by_library_id.keys():
+        mlst_sequence_type_path = Path(os.path.join(
+            analysis_dir,
+            'mlst-nf-v0.1-output',
+            library_id,
+            f"{library_id}_sequence_type.csv"
+        ))
         if os.path.exists(mlst_sequence_type_path):
             sequence_type_records = parsers.parse_mlst_sequence_type(mlst_sequence_type_path)
             sequence_type = ':'.join([
@@ -138,7 +167,12 @@ def _collect_email_data(analysis_dir):
             libraries_by_library_id[library_id]['mlst'] = sequence_type
 
     for library_id in libraries_by_library_id.keys():
-        abricate_ncbi_path = Path(os.path.join(analysis_dir, 'plasmid-screen-v0.2-output', library_id, f"{library_id}_abricate_ncbi.tsv"))
+        abricate_ncbi_path = Path(os.path.join(
+            analysis_dir,
+            'plasmid-screen-v0.2-output',
+            library_id,
+            f"{library_id}_abricate_ncbi.tsv"
+        ))
         if os.path.exists(abricate_ncbi_path):
             abricate_records = parsers.parse_abricate(abricate_ncbi_path)
             carbapenemase_genes = []
@@ -147,8 +181,14 @@ def _collect_email_data(analysis_dir):
                     carbapenemase_genes.append(abricate_record['gene'])
             libraries_by_library_id[library_id]['carbapenemase_genes'] = carbapenemase_genes
 
+
     plasmids_by_library_id = {}
-    resistance_gene_report_glob = os.path.join(analysis_dir, 'plasmid-screen-v0.*-output', '*', '*_resistance_gene_report.tsv')
+    resistance_gene_report_glob = os.path.join(
+        analysis_dir,
+        'plasmid-screen-v0.*-output',
+        '*',
+        '*_resistance_gene_report.tsv'
+    )
     for resistance_gene_report_path in glob.glob(resistance_gene_report_glob):
         resistance_gene_report = parsers.parse_resistance_gene_report(Path(resistance_gene_report_path))
         for resistance_gene_report_record in resistance_gene_report:
@@ -170,13 +210,18 @@ def _collect_email_data(analysis_dir):
             if closest_db_plasmid == '-':
                 closest_db_plasmid = 'N/A'
             plasmid['closest_db_plasmid'] = closest_db_plasmid
+            
             reconstruction_size = resistance_gene_report_record['plasmid_reconstruction_size']
+            plasmid['size_kb'] = "N/A"
             if reconstruction_size:
-                reconstruction_size_formatted = f"{reconstruction_size:,d}"
-            else:
-                reconstruction_size_formatted = 'N/A'
-            plasmid['size_bp'] = reconstruction_size_formatted
-            plasmid['num_contigs'] = resistance_gene_report_record['num_contigs_in_plasmid_reconstruction']
+                reconstruction_size_kb = round(reconstruction_size / 1000, 3)
+                plasmid['size_kb'] = reconstruction_size_kb            
+
+            plasmid['num_contigs'] = "N/A"
+            num_contigs_in_plasmid_reconstruction = resistance_gene_report_record['num_contigs_in_plasmid_reconstruction']
+            if num_contigs_in_plasmid_reconstruction:
+                plasmid['num_contigs'] = resistance_gene_report_record['num_contigs_in_plasmid_reconstruction']
+
             percent_ref_coverage = resistance_gene_report_record['percent_ref_plasmid_coverage_above_depth_threshold']
             if percent_ref_coverage:
                 percent_ref_coverage_formatted = f"{round(percent_ref_coverage, 1)}%"
@@ -196,15 +241,13 @@ def _collect_email_data(analysis_dir):
                 for plasmid in plasmids_by_library_id[library_id]:
                     if plasmid['cluster_id'] == plasmid_cluster_id:
                         plasmid['carbapenemase_genes'].append(carbapenemase_gene)
-                
-        
-    
+   
+
     email_data['libraries'] = []
     library_ids_sorted = list(sorted(libraries_by_library_id.keys()))
     for library_id in library_ids_sorted:
         library_data = libraries_by_library_id[library_id]
         email_data['libraries'].append(library_data)
-
 
     email_data['plasmids'] = []
     library_ids_sorted = list(sorted(plasmids_by_library_id.keys()))
@@ -219,6 +262,7 @@ def _collect_email_data(analysis_dir):
 
 def send_notification_email(analysis_dir: Path, notification_config: dict):
     """
+    Collect relevant data from an analysis output dir
     """
     access_token = _get_access_token(notification_config)
     if not access_token:
@@ -248,6 +292,6 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--analysis-outdir')
-    parser.add_argument('--config')
+    parser.add_argument('-c', '--config')
     args = parser.parse_args()
     main(args)
