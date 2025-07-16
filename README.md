@@ -27,15 +27,14 @@ This tool takes a single config file, in JSON format, with the following structu
     "analysis_output_dir": "/path/to/analysis_by_run",
     "analysis_work_dir": "/path/to/auto-cpo-work",
     "conda_cache_dir": "/path/to/.conda/envs",
-	"notification": {
-	    "system_config_file": "/path/to/config.json",
-		"recipent_email_addresses": [
-		    "someone@example.org",
-                    "someone.else@example.org"
-		],
-		"send_notification_emails": true
-        }
-    ],
+    "notification": {
+        "system_config_file": "/path/to/config.json",
+        "recipent_email_addresses": [
+            "someone@example.org",
+            "someone.else@example.org"
+        ],
+        "send_notification_emails": true
+    },
     "scan_interval_seconds": 3600,
     "analyze_runs_in_reverse_order": true,
     "qc_filters": {
