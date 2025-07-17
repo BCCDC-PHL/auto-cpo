@@ -159,6 +159,10 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode
     """
     sequencing_run_id = run['sequencing_run_id']
     top_level_analysis_output_dir = config['analysis_output_dir']
+
+    # For each pipeline, we check a set of conditions to decide whether to run it
+    # If any pipeline is run, we'll send a notification email
+    any_pipeline_ran = False
     
     for pipeline in config['pipelines_by_analysis_mode'][analysis_mode]:
         if pipeline is None:
@@ -195,12 +199,17 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode
         if pipeline:
             analysis.run_pipeline(config, pipeline, run, analysis_mode)
             post_analysis.post_analysis(config, pipeline, run, analysis_mode)
+            any_pipeline_ran = True
         else:
             logging.error(json.dumps({"event_type": "analysis_skipped", "sequencing_run_id": sequencing_run_id, "reason": "analysis_preparation_failed"}))
             continue
 
     run_analysis_outdir = os.path.join(top_level_analysis_output_dir, sequencing_run_id, analysis_mode)
 
-    if 'send_notification_emails' in config.get('notification', {}) and config['notification']['send_notification_emails']:
-        send_notification_email(run_analysis_outdir, config['notification'])
+    notification_emails_enabled = 'send_notification_emails' in config.get('notification', {}) and config['notification']['send_notification_emails']
+    if any_pipeline_ran and notification_emails_enabled:
+        try:
+            send_notification_email(run_analysis_outdir, config['notification'])
+        except Exception as e:
+            logging.error(json.dumps({"event_type": "send_notification_email_failed", "sequencing_run_id": sequencing_run_id, "exception": str(e)}))
     
