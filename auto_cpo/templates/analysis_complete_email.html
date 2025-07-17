@@ -38,8 +38,8 @@
       <tr>
         <th>Library ID</th>
         <th>QC Status</th>
-	<th>Assembly Size (Mb)</th>
-	<th>Num. Contigs</th>
+	<th style="text-align:right;">Assembly Size (Mb)</th>
+	<th style="text-align:right;">Num. Contigs</th>
 	<th>Species (%)</th>
 	<th>MLST</th>
         <th>Carbapenemase Gene(s)</th>
@@ -52,8 +52,8 @@
         <td class="{{ 'qc-pass' if library.qc_status == 'Pass' else 'qc-fail' }}">
           {{ library.qc_status }}
         </td>
-	<td>{{ library.assembly_size_mb or 'N/A' }}</td>
-	<td>{{ library.assembly_num_contigs or 'N/A' }}</td>
+	<td style="text-align:right;">{{ library.assembly_size_mb or 'N/A' }}</td>
+	<td style="text-align:right;">{{ library.assembly_num_contigs or 'N/A' }}</td>
 	<td>{{ library.species_percentage or 'N/A' }}</td>
 	<td>{{ library.mlst or 'N/A' }}</td>
         <td>{{ library.carbapenemase_genes | join(', ') if library.carbapenemase_genes else 'None detected' }}</td>

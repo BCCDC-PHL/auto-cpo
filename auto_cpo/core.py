@@ -201,3 +201,4 @@ def analyze_run(config: dict[str, object], run: dict[str, object], analysis_mode
 
     run_analysis_outdir = os.path.join(top_level_analysis_output_dir, sequencing_run_id, analysis_mode)
     send_notification_email(run_analysis_outdir, config['notification'])
+    
