@@ -144,7 +144,7 @@ def _collect_email_data(analysis_dir):
         if os.path.exists(assembly_qc_path):
             assembly_qc = parsers.parse_quast(assembly_qc_path)
             assembly_size = assembly_qc[0]['total_length']
-            assembly_size_mb = round(assembly_size / 1_000_000, 3)
+            assembly_size_mb = round(assembly_size / 1_000_000, 2)
             libraries_by_library_id[library_id]['assembly_size_mb'] = assembly_size_mb
 
             num_contigs = assembly_qc[0]['num_contigs']
@@ -214,7 +214,7 @@ def _collect_email_data(analysis_dir):
             reconstruction_size = resistance_gene_report_record['plasmid_reconstruction_size']
             plasmid['size_kb'] = "N/A"
             if reconstruction_size:
-                reconstruction_size_kb = round(reconstruction_size / 1000, 3)
+                reconstruction_size_kb = round(reconstruction_size / 1000, 1)
                 plasmid['size_kb'] = reconstruction_size_kb            
 
             plasmid['num_contigs'] = "N/A"
@@ -269,24 +269,38 @@ def send_notification_email(analysis_dir: Path, notification_config: dict):
         return None
 
     email_info = _collect_email_data(analysis_dir)
+    sequencing_run_id = email_info['sequencing_run_id']
     email_body = _prepare_email_body(email_info, notification_config)
+    notification_email_path = os.path.join(analysis_dir, f"{sequencing_run_id}_notification_email.html")
+    try:
+        with open(notification_email_path, 'w') as f:
+            f.write(email_body.get('email', {}).get('body', ''))
+            f.write('\n')
+    except Exception as e:
+        logging.error(json.dumps({
+            "event_type": "failed_to_write_notification_email_to_disk",
+            "sequencing_run_id": sequencing_run_id,
+            "notification_email_path": notification_email_path,
+        }))
+        
     email_url = notification_config['email_url']
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
         "Authorization": "Bearer " + access_token,
     }
-    print(json.dumps(email_body, indent=2))
+    # print(json.dumps(email_body, indent=2))
 
     response = requests.post(email_url, data=json.dumps(email_body), headers=headers)
-
-    print(json.dumps(response.json(), indent=2))
-
+    
+    # print(json.dumps(response.json(), indent=2))
 
 
 def main(args):
     config = load_config(args.config)
+    sequencing_run_id = os.path.basename(os.path.dirname(args.analysis_outdir))
     send_notification_email(args.analysis_outdir, config['notification'])
+    logging.info(json.dumps({"event_type": "email_notification_sent", "sequencing_run_id": sequencing_run_id, "analysis_output_dir": os.path.abspath(args.analysis_outdir)}))
     
 
 if __name__ == '__main__':
