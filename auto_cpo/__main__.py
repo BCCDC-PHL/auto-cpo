@@ -64,15 +64,6 @@ def main():
                         core.analyze_run(config, run, "short")
                     elif run['instrument_type'] == 'nanopore':
                         core.analyze_run(config, run, "hybrid")
-
-                    # Temp for test/devel. Remove before merging.
-                    top_level_analysis_output_dir = config['analysis_output_dir']
-                    sequencing_run_id = run['sequencing_run_id']
-                    analysis_mode = 'short'
-                    run_analysis_outdir = os.path.join(top_level_analysis_output_dir, sequencing_run_id, analysis_mode)
-                    send_notification_email(run_analysis_outdir, config['notification'])
-                    logging.info("QUITTING EARLY")
-                    exit()
                 if quit_when_safe:
                     exit(0)
             scan_complete_timestamp = datetime.datetime.now()
