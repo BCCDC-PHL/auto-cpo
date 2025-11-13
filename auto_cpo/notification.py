@@ -116,7 +116,7 @@ def _collect_email_data(analysis_dir):
             'q30_percent_qc_status': "LOW_SEQ_QUALITY"
         }
 
-        
+
         for qc_status_field, qc_flag in qc_flags_by_status_field.items():
             sample_qc_status = sample_qc[qc_status_field]
             if sample_qc_status != 'PASS':
@@ -130,14 +130,14 @@ def _collect_email_data(analysis_dir):
     # Otherwise status remains 'Pass'
     for library_id, library in libraries_by_library_id.items():
         for qc_flag in library['qc_flags']:
-            if qc_flag['status'] == "WARN":
-                library['qc_status'] = 'Warning'
-
-    for library_id, library in libraries_by_library_id.items():
-        for qc_flag in library['qc_flags']:
             if qc_flag['status'] == "FAIL":
                 library['qc_status'] = 'Fail'
-
+                break
+        if library['qc_status'] != 'Fail':
+            for qc_flag in library['qc_flags']:
+                if qc_flag['status'] == "WARN":
+                    library['qc_status'] = 'Warning'
+                    break
 
     taxon_abundance_top_5_path = Path(os.path.join(
         analysis_dir,

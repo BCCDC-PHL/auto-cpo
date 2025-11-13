@@ -3,12 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    :root {
-	--color-bccdc-blue:#004a87;
-	--color-pass-green: #0c9261;
-	--color-warning-yellow: #f5ce42;
-	--color-fail-red: #df3023;
-    }
     h1, h2, h3 { color: #004a87; }
     body { font-family: sans-serif; }
     table {
@@ -68,9 +62,9 @@
         </td>
 	<td>
 	{% for qc_flag in library.qc_flags %}
-	  {% if library.qc_status == 'Warning' %}
+	  {% if qc_flag.status == 'WARN' %}
 	    <span style="background-color: #f5ce42;">
-	  {% elif library.qc_status == 'Fail' %}
+	  {% elif qc_flag.status == 'FAIL' %}
 	    <span style="background-color: #df3023;">
 	  {% endif %}
 	  {{ qc_flag.flag }} </span>
