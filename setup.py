@@ -3,7 +3,7 @@ from setuptools import setup, find_namespace_packages
 
 setup(
     name='auto-cpo',
-    version='0.3.0',
+    version='0.3.1',
     packages=find_namespace_packages(),
     entry_points={
         "console_scripts": [

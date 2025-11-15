@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    h1, h2, h3 { color: #004a87 }
+    h1, h2, h3 { color: #004a87; }
     body { font-family: sans-serif; }
     table {
       width: 100%;
@@ -19,8 +19,9 @@
       color: #004a87;
       background-color: #f2f2f2;
     }
-    .qc-pass { color: green; font-weight: bold; }
-    .qc-fail { color: red; font-weight: bold; }
+    .qc-pass { color: #0c9261; font-weight: bold; }
+    .qc-warning { color: #f5ce42; font-weight: bold; }
+    .qc-fail { color: #df3023; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -38,10 +39,11 @@
       <tr>
         <th>Library ID</th>
         <th>QC Status</th>
-	<th style="text-align:right;">Assembly Size (Mb)</th>
-	<th style="text-align:right;">Num. Contigs</th>
-	<th>Species (%)</th>
-	<th>MLST</th>
+        <th>QC Flags</th>
+        <th style="text-align:right;">Assembly Size (Mb)</th>
+        <th style="text-align:right;">Num. Contigs</th>
+        <th>Species (%)</th>
+        <th>MLST</th>
         <th>Carbapenemase Gene(s)</th>
       </tr>
     </thead>
@@ -49,13 +51,29 @@
       {% for library in libraries %}
       <tr>
         <td>{{ library.library_id }}</td>
-        <td class="{{ 'qc-pass' if library.qc_status == 'Pass' else 'qc-fail' }}">
+        {% if library.qc_status == 'Pass' %}
+        <td class="qc-pass">
+          {% elif library.qc_status == 'Warning' %}
+        <td class="qc-warning">
+          {% elif library.qc_status == 'Fail' %}
+        <td class="qc-fail">
+        {% endif %}
           {{ library.qc_status }}
         </td>
-	<td style="text-align:right;">{{ library.assembly_size_mb or 'N/A' }}</td>
-	<td style="text-align:right;">{{ library.assembly_num_contigs or 'N/A' }}</td>
-	<td>{{ library.species_percentage or 'N/A' }}</td>
-	<td>{{ library.mlst or 'N/A' }}</td>
+        <td>
+        {% for qc_flag in library.qc_flags %}
+          {% if qc_flag.status == 'WARN' %}
+            <span style="background-color: #f5ce42;">
+          {% elif qc_flag.status == 'FAIL' %}
+            <span style="background-color: #df3023;">
+          {% endif %}
+          {{ qc_flag.flag }} </span>
+        {% endfor %}
+        </td>
+        <td style="text-align:right;">{{ library.assembly_size_mb or 'N/A' }}</td>
+        <td style="text-align:right;">{{ library.assembly_num_contigs or 'N/A' }}</td>
+        <td>{{ library.species_percentage or 'N/A' }}</td>
+        <td>{{ library.mlst or 'N/A' }}</td>
         <td>{{ library.carbapenemase_genes | join(', ') if library.carbapenemase_genes else 'None detected' }}</td>
       </tr>
       {% endfor %}
@@ -69,23 +87,23 @@
       <tr>
         <th>Library ID</th>
         <th>Plasmid Cluster ID</th>
-	<th>Closest DB Plasmid</th>
-	<th style="text-align:right;">Percent Ref Plasmid Coverage (at 10x Depth)</th>
-	<th>Carbapenemase Gene(s)</th>
-	<th style="text-align:right;">Plasmid Reconstruction Size (Kb)</th>
-	<th style="text-align:right;">Num. Contigs</th>
+        <th>Closest DB Plasmid</th>
+        <th style="text-align:right;">Percent Ref Plasmid Coverage (at 10x Depth)</th>
+        <th>Carbapenemase Gene(s)</th>
+        <th style="text-align:right;">Plasmid Reconstruction Size (Kb)</th>
+        <th style="text-align:right;">Num. Contigs</th>
       </tr>
     </thead>
     <tbody>
       {% for plasmid in plasmids %}
       <tr>
         <td>{{ plasmid.library_id }}</td>
-	<td>{{ plasmid.cluster_id }}</td>
-	<td>{{ plasmid.closest_db_plasmid }}</td>
-	<td style="text-align:right;">{{ plasmid.percent_ref_coverage }}</td>
-	<td>{{ plasmid.carbapenemase_genes | join(', ') }}</td>
-	<td style="text-align:right;">{{ plasmid.size_kb }}</td>
-	<td style="text-align:right;">{{ plasmid.num_contigs or 'N/A' }}</td>
+        <td>{{ plasmid.cluster_id }}</td>
+        <td>{{ plasmid.closest_db_plasmid }}</td>
+        <td style="text-align:right;">{{ plasmid.percent_ref_coverage }}</td>
+        <td>{{ plasmid.carbapenemase_genes | join(', ') }}</td>
+        <td style="text-align:right;">{{ plasmid.size_kb }}</td>
+        <td style="text-align:right;">{{ plasmid.num_contigs or 'N/A' }}</td>
       </tr>
       {% endfor %}
     </tbody>

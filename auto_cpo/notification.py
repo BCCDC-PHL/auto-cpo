@@ -107,17 +107,37 @@ def _collect_email_data(analysis_dir):
     libraries_by_library_id = {}
     for library_id, sample_qc in sample_qc_summary_by_library_id.items():
         if library_id not in libraries_by_library_id:
-            libraries_by_library_id[library_id] = {'library_id': library_id}
+            libraries_by_library_id[library_id] = {'library_id': library_id,
+                                                   'qc_status': 'Pass',
+                                                   'qc_flags': []}
 
-        qc_status_fields = [
-            'pre_alignment_estimated_depth_coverage_qc_status',
-            'q30_percent_qc_status',
-        ]
-        qc_checks_passed = [sample_qc[qc_status_field] == "PASS" for qc_status_field in qc_status_fields]
-        if all(qc_checks_passed):
-            libraries_by_library_id[library_id]['qc_status'] = 'Pass'
-        else:
-            libraries_by_library_id[library_id]['qc_status'] = 'Fail'
+        qc_flags_by_status_field = {
+            'pre_alignment_estimated_depth_coverage_qc_status': "LOW_DEPTH_COVERAGE",
+            'q30_percent_qc_status': "LOW_SEQ_QUALITY"
+        }
+
+
+        for qc_status_field, qc_flag in qc_flags_by_status_field.items():
+            sample_qc_status = sample_qc[qc_status_field]
+            if sample_qc_status != 'PASS':
+                libraries_by_library_id[library_id]['qc_flags'].append({
+                    'flag': qc_flag,
+                    'status': sample_qc_status,
+                })
+
+    # If any metric has WARN status but none have FAIL status, overall status is 'Warning'
+    # If any metric has FAIL status, overall status is 'Fail'
+    # Otherwise status remains 'Pass'
+    for library_id, library in libraries_by_library_id.items():
+        for qc_flag in library['qc_flags']:
+            if qc_flag['status'] == "FAIL":
+                library['qc_status'] = 'Fail'
+                break
+        if library['qc_status'] != 'Fail':
+            for qc_flag in library['qc_flags']:
+                if qc_flag['status'] == "WARN":
+                    library['qc_status'] = 'Warning'
+                    break
 
     taxon_abundance_top_5_path = Path(os.path.join(
         analysis_dir,
