@@ -21,7 +21,13 @@ from auto_cpo.notification import send_notification_email
 
 def find_fastq_dirs(config, check_symlinks_complete=True):
     """
-    Find all directories in the fastq_by_run_dir that match the expected format for a sequencing run directory.
+    Scan the configured FASTQ run directory and yield only valid sequencing-run directories.
+
+    Directory names are checked against the expected MiSeq, NextSeq, GridION, and PromethION
+    sequencing-run ID patterns. Directories that are valid runs and marked ready via a
+    `symlinks_complete.json` file are yielded for analysis. Directories that are skipped are
+    logged with structured JSON events, including a warning when a directory name does not match
+    the expected sequencing-run regex pattern.
 
     :param config: Application config.
     :type config: dict[str, object]
@@ -33,7 +39,8 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
     miseq_run_id_regex = "\\d{6}_M\\d{5}_\\d+_\\d{9}-[A-Z0-9]{5}"
     nextseq_run_id_regex = "\\d{6}_VH\\d{5}_\\d+_[A-Z0-9]{9}"
     gridion_run_id_regex = "\\d{8}_\\d{4}_X[1-5]_[A-Z0-9]+_[a-z0-9]{8}"
-    promethion_run_id_regex = "\\d{8}_\\d{4}_P\\dS_\\d+-\\d_[A-Z0-9]+_[a-z0-9]{8}"
+    promethion_run_id_regex = "\\d{8}_\\d{4}_P\\dS_\\d+-[A-Z0-9]_[A-Z0-9]+_[a-z0-9]{8}"
+    
 
     fastq_by_run_dir = config['fastq_by_run_dir']
     subdirs = os.scandir(fastq_by_run_dir)
@@ -59,14 +66,21 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
             ready_to_analyze = os.path.exists(os.path.join(subdir.path, "symlinks_complete.json"))
         else:
             ready_to_analyze = True
-            
+
+        regex_matches = {
+            "miseq": bool(matches_miseq_regex),
+            "nextseq": bool(matches_nextseq_regex),
+            "gridion": bool(matches_gridion_regex),
+            "promethion": bool(matches_promethion_regex),
+        }
+
         conditions_checked = {
             "is_directory": subdir.is_dir(),
             "matches_sequencing_run_id_format": matches_sequencing_run_id_format,
             "ready_to_analyze": ready_to_analyze,
         }
         conditions_met = list(conditions_checked.values())
-        
+
         analysis_parameters = {}
         if all(conditions_met):
 
@@ -86,6 +100,14 @@ def find_fastq_dirs(config, check_symlinks_complete=True):
                 run["instrument_type"] = "nanopore"
             yield run
         else:
+            if subdir.is_dir() and not matches_sequencing_run_id_format:
+                logging.warning(json.dumps({
+                    "event_type": "run_id_format_mismatch",
+                    "sequencing_run_id": run_id,
+                    "fastq_directory_path": run_fastq_directory,
+                    "regex_matches": regex_matches,
+                    "reason": "directory_name_does_not_match_expected_sequencing_run_id_pattern",
+                }))
             logging.debug(json.dumps({"event_type": "directory_skipped", "fastq_directory": run_fastq_directory, "conditions_checked": conditions_checked}))
             yield None
     
